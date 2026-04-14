@@ -36,3 +36,58 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 npm start
 - Never commit files from `~/.codex-telegram-relay/`; that directory is local runtime state and config only.
 - Keep examples and tests generic. Use placeholders such as `YOUR_TELEGRAM_BOT_TOKEN` and `your-telegram-username`.
 - Before committing, scan staged changes for secrets or personal paths and remove them.
+
+## Release Automation
+
+- npm publishing is handled by GitHub Actions in [`.github/workflows/publish.yml`](.github/workflows/publish.yml).
+- Keep all release-process notes in `AGENTS.md`, not in `README.md`. `README.md` is user-facing only.
+
+### Required GitHub/NPM Configuration
+
+- GitHub Actions must be enabled for this repository.
+- The repository must define a GitHub Actions secret named `NPM_TOKEN`.
+- `NPM_TOKEN` should be an npm automation token belonging to an account that is allowed to publish the package.
+- The release tag must be pushed to a commit that already contains [`.github/workflows/publish.yml`](.github/workflows/publish.yml), otherwise no publish workflow will run.
+
+### Release Preconditions Checklist
+
+- Confirm [`.github/workflows/publish.yml`](.github/workflows/publish.yml) exists on the branch that will receive the release tag.
+- Confirm the package name in `package.json` is the one intended for npm publication.
+- Confirm the npm account behind `NPM_TOKEN` has publish access for that package name.
+- Confirm `package.json` `version` has been updated to the exact version to be released.
+- Confirm the working tree does not contain secrets, local usernames, or paths that must not be committed.
+- Confirm the test suite passes before creating or pushing the release tag.
+
+### Trigger And Version Rules
+
+- The publish workflow is triggered only by pushing a Git tag in the exact `vX.Y.Z` format.
+- The workflow strips the leading `v` from the tag and compares the rest to `package.json` `version`.
+- Example: tag `v0.1.1` requires `"version": "0.1.1"` in `package.json`.
+- If the tag and `package.json` version do not match exactly, the workflow fails intentionally and nothing is published.
+- Tags such as `0.1.1`, `release-0.1.1`, or `v0.1` do not match the workflow trigger and will not publish.
+- The same workflow also supports a manual `workflow_dispatch` run for safe validation. Manual runs do not publish to npm; they only run install, tests, `npm whoami`, and `npm publish --dry-run`.
+
+### Expected Release Flow
+
+- Update `package.json` to the release version, or use `npm version patch|minor|major` to do it and create the matching tag.
+- Push the branch commit that contains the version bump and the publish workflow.
+- Push the corresponding `vX.Y.Z` tag to GitHub.
+- GitHub Actions will then install dependencies, run `npm test`, verify the tag/version match, and run `npm publish`.
+
+The expected command sequence is:
+
+```bash
+npm version patch
+git push origin main
+git push origin --tags
+```
+
+### Common Publish Failures
+
+- `NPM_TOKEN` is missing in GitHub repository secrets.
+- `NPM_TOKEN` exists but the npm account does not have publish permission.
+- `npm whoami` fails in GitHub Actions, which means `NPM_TOKEN` is invalid or lacks registry access.
+- The tag format is wrong, so the workflow is never triggered.
+- The tag points to a commit that does not yet contain the publish workflow.
+- The tag version and `package.json` version do not match.
+- `npm test` fails in GitHub Actions, which blocks `npm publish`.
