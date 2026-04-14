@@ -109,24 +109,27 @@ async function createSession(options = {}) {
   const fakeBotApi = options.fakeBotApi ?? new FakeBotApi();
   const runnerFactory = options.runnerFactory ?? createControlledRunnerFactory();
   const configStore = options.configStore ?? new FakeConfigStore();
+  const botConfig = {
+    name: "primary",
+    token: "token",
+    workdir: "/tmp/project",
+    allowedUsernames: ["alloweduser"],
+    yolo: true,
+    model: "default",
+    reasoningEffort: "default",
+    ...options.botConfig
+  };
 
   const session = new ChatSession({
-    botConfig: {
-      name: "primary",
-      token: "token",
-      workdir: "/tmp/project",
-      allowedUsernames: ["alloweduser"],
-      yolo: true,
-      model: "default",
-      reasoningEffort: "default"
-    },
+    botConfig,
     botApi: fakeBotApi,
     stateStore,
     configStore,
     logger: () => {},
     chatId: 1001,
     createCodexRun: (params) => runnerFactory.createRun(params),
-    resolveContextLength: options.resolveContextLength ?? (async () => 21300)
+    resolveContextLength: options.resolveContextLength ?? (async () => 21300),
+    resolveHomeDir: options.resolveHomeDir
   });
   session.startTyping = () => {};
   session.stopTyping = () => {};
@@ -241,6 +244,213 @@ test("new session clears persisted thread id and usage", async () => {
   );
 });
 
+test("/workdir without args returns the current workdir", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleWorkdir("");
+
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current workdir: /tmp/project\\.");
+});
+
+test("/workdir expands ~/ paths and persists the new workdir", async () => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-home-"));
+  const desktopDir = path.join(homeDir, "Desktop");
+  await fs.mkdir(desktopDir);
+  const { session, configStore, fakeBotApi } = await createSession({
+    resolveHomeDir: () => homeDir
+  });
+
+  await session.handleWorkdir("~/Desktop");
+
+  assert.equal(session.botConfig.workdir, desktopDir);
+  assert.equal(configStore.patches.at(-1).patch.workdir, desktopDir);
+  assert.match(fakeBotApi.messages.at(-1).text, /Started a new session/);
+});
+
+test("/workdir rejects nonexistent paths", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleWorkdir("/definitely/not/a/real/path");
+
+  assert.match(fakeBotApi.messages.at(-1).text, /Invalid workdir/);
+  assert.match(fakeBotApi.messages.at(-1).text, /absolute path/);
+  assert.match(fakeBotApi.messages.at(-1).text, /existing directory/);
+});
+
+test("/workdir rejects file paths", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
+  const filePath = path.join(tempDir, "config.json");
+  await fs.writeFile(filePath, "{}", "utf8");
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleWorkdir(filePath);
+
+  assert.match(fakeBotApi.messages.at(-1).text, /Invalid workdir/);
+  assert.match(fakeBotApi.messages.at(-1).text, /existing directory/);
+});
+
+test("/workdir rejects plain relative paths", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleWorkdir("subdir");
+  assert.match(fakeBotApi.messages.at(-1).text, /Invalid workdir/);
+
+  await session.handleWorkdir("../repo");
+  assert.match(fakeBotApi.messages.at(-1).text, /Invalid workdir/);
+});
+
+test("/workdir is a no-op when the normalized path matches the current workdir", async () => {
+  const { session, stateStore, fakeBotApi, configStore } = await createSession();
+  await session.updateThreadId("thread-old");
+
+  await session.handleWorkdir("/tmp/project");
+
+  assert.equal(session.threadId, "thread-old");
+  assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-old");
+  assert.equal(configStore.patches.length, 0);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Workdir is already set to /tmp/project\\.");
+});
+
+test("/workdir updates config, clears persisted session state, and affects the next run while idle", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
+  const { session, stateStore, fakeBotApi, runnerFactory, configStore } = await createSession();
+  await session.updateThreadId("thread-old");
+  await session.updateUsage({
+    lastUsage: {
+      contextLength: 1200,
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 0
+    },
+    cumulativeUsage: {
+      inputTokens: 1000,
+      cachedInputTokens: 0,
+      outputTokens: 200
+    }
+  });
+
+  await session.handleWorkdir(nextWorkdir);
+
+  assert.equal(session.botConfig.workdir, nextWorkdir);
+  assert.equal(session.threadId, null);
+  assert.equal(session.lastUsage, null);
+  assert.equal(configStore.patches.at(-1).patch.workdir, nextWorkdir);
+  assert.deepEqual(stateStore.getChatState("primary", 1001), {
+    threadId: null,
+    lastUsage: null,
+    cumulativeUsage: null,
+    yolo: null,
+    model: null,
+    reasoningEffort: null
+  });
+  assert.match(fakeBotApi.messages.at(-1).text, /Started a new session/);
+
+  await session.enqueueMessage("hello");
+  assert.equal(runnerFactory.runs.at(-1).params.workdir, nextWorkdir);
+  assert.equal(runnerFactory.runs.at(-1).params.threadId, null);
+});
+
+test("/workdir aborts the active run, clears the queue, and uses the new workdir on the next run", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
+  const { session, runnerFactory, stateStore } = await createSession();
+  await session.updateThreadId("thread-old");
+
+  await session.enqueueMessage("first");
+  await session.enqueueMessage("second");
+  assert.equal(session.queue.length, 1);
+
+  await session.handleWorkdir(nextWorkdir);
+
+  assert.equal(runnerFactory.runs[0].aborted, true);
+  assert.equal(session.queue.length, 0);
+  assert.equal(session.threadId, null);
+  assert.equal(stateStore.getChatState("primary", 1001).threadId, null);
+  assert.equal(session.botConfig.workdir, nextWorkdir);
+
+  await session.enqueueMessage("after switch");
+  assert.equal(runnerFactory.runs.at(-1).params.workdir, nextWorkdir);
+  assert.equal(runnerFactory.runs.at(-1).params.threadId, null);
+});
+
+test("/workdir leaves workdir and thread state unchanged when config persistence fails", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
+  const configStore = new FakeConfigStore();
+  configStore.failure = new Error("disk full");
+  const { session, stateStore, fakeBotApi } = await createSession({ configStore });
+  await session.updateThreadId("thread-old");
+  await session.updateUsage({
+    lastUsage: {
+      contextLength: 1200,
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 0
+    },
+    cumulativeUsage: {
+      inputTokens: 1000,
+      cachedInputTokens: 0,
+      outputTokens: 200
+    }
+  });
+
+  await session.handleWorkdir(nextWorkdir);
+
+  assert.equal(session.botConfig.workdir, "/tmp/project");
+  assert.equal(session.threadId, "thread-old");
+  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
+    contextLength: 1200,
+    inputTokens: 1000,
+    outputTokens: 200,
+    cacheReadTokens: 0
+  });
+  assert.equal(fakeBotApi.messages.at(-1).text, "Failed to persist workdir setting: disk full");
+});
+
+test("/workdir rolls back config and in-memory workdir if clearing the session state fails", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
+  const { session, stateStore, configStore, fakeBotApi } = await createSession();
+  await session.updateThreadId("thread-old");
+  await session.updateUsage({
+    lastUsage: {
+      contextLength: 1200,
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 0
+    },
+    cumulativeUsage: {
+      inputTokens: 1000,
+      cachedInputTokens: 0,
+      outputTokens: 200
+    }
+  });
+
+  const originalPatchChatState = stateStore.patchChatState.bind(stateStore);
+  stateStore.patchChatState = async (botName, chatId, patch) => {
+    if (patch.threadId === null && patch.lastUsage === null && patch.cumulativeUsage === null) {
+      throw new Error("state write failed");
+    }
+    return originalPatchChatState(botName, chatId, patch);
+  };
+
+  await session.handleWorkdir(nextWorkdir);
+
+  assert.equal(session.botConfig.workdir, "/tmp/project");
+  assert.equal(session.threadId, "thread-old");
+  assert.deepEqual(configStore.patches.map((entry) => entry.patch), [
+    { workdir: nextWorkdir },
+    { workdir: "/tmp/project" }
+  ]);
+  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
+    contextLength: 1200,
+    inputTokens: 1000,
+    outputTokens: 200,
+    cacheReadTokens: 0
+  });
+  assert.equal(
+    fakeBotApi.messages.at(-1).text,
+    "Failed to reset session after changing workdir: state write failed"
+  );
+});
+
 test("resumed sessions without prior cumulative totals keep usage deltas unknown", async () => {
   const { session, runnerFactory, stateStore } = await createSession();
   session.threadId = "thread-existing";
@@ -259,8 +469,7 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
   });
   runnerFactory.runs[0].finish();
 
-  await flush();
-  await flush();
+  await waitFor(() => stateStore.getChatState("primary", 1001).lastUsage !== null);
 
   assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
     contextLength: 21300,
@@ -822,4 +1031,37 @@ test("runtime routes /model and /reasoning to the session", async () => {
   assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, "high");
   assert.equal(fakeBotApi.messages.at(-2).text, "Model set to gpt\\-5\\.4\\.");
   assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high\\.");
+});
+
+test("runtime routes /workdir to the session", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
+  const stateStore = new StateStore(path.join(tempDir, "state.json"));
+  await stateStore.load();
+
+  const fakeBotApi = new FakeBotApi();
+  const configStore = new FakeConfigStore();
+  const runtime = new BotRuntime({
+    botConfig: {
+      name: "primary",
+      token: "token",
+      workdir: "/tmp/project",
+      allowedUsernames: ["alloweduser"],
+      yolo: true,
+      model: "default",
+      reasoningEffort: "default"
+    },
+    botApi: fakeBotApi,
+    stateStore,
+    configStore
+  });
+
+  await runtime.handleMessage({
+    chat: { id: 1001, type: "private" },
+    from: { id: 42, username: "AllowedUser" },
+    text: `/workdir ${nextWorkdir}`
+  });
+
+  assert.equal(configStore.patches.at(-1).patch.workdir, nextWorkdir);
+  assert.match(fakeBotApi.messages.at(-1).text, /Started a new session/);
 });

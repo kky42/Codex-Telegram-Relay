@@ -17,6 +17,7 @@ test("ConfigStore patches target bot defaults in config.json", async () => {
           {
             name: "primary",
             token: "token-1",
+            workdir: "/tmp/old-project",
             yolo: true,
             model: "default",
             reasoningEffort: "default"
@@ -24,6 +25,7 @@ test("ConfigStore patches target bot defaults in config.json", async () => {
           {
             name: "secondary",
             token: "token-2",
+            workdir: "/tmp/secondary-project",
             yolo: true,
             model: "default",
             reasoningEffort: "default"
@@ -38,6 +40,7 @@ test("ConfigStore patches target bot defaults in config.json", async () => {
 
   const configStore = new ConfigStore(configPath);
   await configStore.patchBotConfig("primary", {
+    workdir: "/tmp/new-project",
     yolo: false,
     model: "gpt-5.4",
     reasoningEffort: "high"
@@ -47,6 +50,7 @@ test("ConfigStore patches target bot defaults in config.json", async () => {
   assert.deepEqual(updated.bots[0], {
     name: "primary",
     token: "token-1",
+    workdir: "/tmp/new-project",
     yolo: false,
     model: "gpt-5.4",
     reasoningEffort: "high"
@@ -54,6 +58,7 @@ test("ConfigStore patches target bot defaults in config.json", async () => {
   assert.deepEqual(updated.bots[1], {
     name: "secondary",
     token: "token-2",
+    workdir: "/tmp/secondary-project",
     yolo: true,
     model: "default",
     reasoningEffort: "default"

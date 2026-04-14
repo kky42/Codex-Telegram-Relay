@@ -40,12 +40,13 @@ export class StateStore {
   }
 
   async patchChatState(botName, chatId, patch) {
-    this.writeChain = this.writeChain.then(async () => {
+    const task = this.writeChain.then(async () => {
       const chatKey = String(chatId);
-      this.state.bots ??= {};
-      this.state.bots[botName] ??= { chats: {} };
-      this.state.bots[botName].chats ??= {};
-      const previous = this.state.bots[botName].chats[chatKey] ?? {};
+      const nextState = structuredClone(this.state);
+      nextState.bots ??= {};
+      nextState.bots[botName] ??= { chats: {} };
+      nextState.bots[botName].chats ??= {};
+      const previous = nextState.bots[botName].chats[chatKey] ?? {};
 
       const next = {
         ...previous,
@@ -77,19 +78,21 @@ export class StateStore {
       }
 
       if (Object.keys(next).length === 0) {
-        delete this.state.bots[botName].chats[chatKey];
+        delete nextState.bots[botName].chats[chatKey];
       } else {
-        this.state.bots[botName].chats[chatKey] = next;
+        nextState.bots[botName].chats[chatKey] = next;
       }
 
-      if (Object.keys(this.state.bots[botName].chats).length === 0) {
-        delete this.state.bots[botName];
+      if (Object.keys(nextState.bots[botName].chats).length === 0) {
+        delete nextState.bots[botName];
       }
 
-      await writeJsonFileAtomic(this.statePath, this.state);
+      await writeJsonFileAtomic(this.statePath, nextState);
+      this.state = nextState;
     });
 
-    await this.writeChain;
+    this.writeChain = task.catch(() => {});
+    await task;
   }
 
   async clearChatState(botName, chatId) {

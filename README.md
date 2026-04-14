@@ -85,6 +85,9 @@ Notes:
 ## Slash Commands
 
 - `/status` shows whether Codex is running, the workdir, yolo/model/reasoning settings, the current context length, and the queued messages.
+- `/workdir` shows the current bot workdir.
+- `/workdir <path>` switches the bot-wide workdir for future runs. Only absolute paths and `~/...` are accepted; plain relative paths such as `subdir` or `../repo` are rejected.
+- `/workdir <path>` aborts the current run for the invoking chat, clears that chat's queue, persists the new bot workdir, and resets that chat to a fresh Codex session before the next prompt. Other chats are not reset or notified, but they will use the new workdir on their next run.
 - `/yolo` toggles between read-only and full-access for future runs.
 - `/yolo on` switches future runs to full-access mode.
 - `/yolo off` switches future runs to read-only mode.

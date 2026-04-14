@@ -6,6 +6,8 @@ export const APP_DIR = path.join(os.homedir(), ".codex-telegram-relay");
 export const DEFAULT_CONFIG_PATH = path.join(APP_DIR, "config.json");
 export const DEFAULT_STATE_PATH = path.join(APP_DIR, "state.json");
 export const TELEGRAM_MESSAGE_LIMIT = 4000;
+export const INVALID_WORKDIR_MESSAGE =
+  "Use an absolute path or ~/..., and make sure it points to an existing directory.";
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,6 +39,41 @@ export async function writeJsonFileAtomic(filePath, value) {
 
 export function normalizeTelegramUsername(username) {
   return String(username || "").trim().replace(/^@+/, "").toLowerCase();
+}
+
+export function expandWorkdirPath(rawPath, { homeDir = os.homedir() } = {}) {
+  const normalized = String(rawPath ?? "").trim();
+  if (normalized === "~") {
+    return homeDir;
+  }
+
+  if (/^~[\\/]/.test(normalized)) {
+    return path.resolve(homeDir, normalized.slice(2));
+  }
+
+  if (path.isAbsolute(normalized)) {
+    return path.resolve(normalized);
+  }
+
+  throw new Error(INVALID_WORKDIR_MESSAGE);
+}
+
+export async function resolveWorkdirPath(rawPath, { homeDir = os.homedir() } = {}) {
+  const expandedPath = expandWorkdirPath(rawPath, { homeDir });
+
+  try {
+    const stats = await fs.stat(expandedPath);
+    if (!stats.isDirectory()) {
+      throw new Error(INVALID_WORKDIR_MESSAGE);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === INVALID_WORKDIR_MESSAGE) {
+      throw error;
+    }
+    throw new Error(INVALID_WORKDIR_MESSAGE);
+  }
+
+  return expandedPath;
 }
 
 export function formatTokenCountK(value) {

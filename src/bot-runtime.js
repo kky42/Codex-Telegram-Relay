@@ -17,8 +17,11 @@ import {
 } from "./render.js";
 import { TelegramApiError, TelegramBotApi } from "./telegram-api.js";
 import {
+  expandWorkdirPath,
   formatTokenCountK,
+  INVALID_WORKDIR_MESSAGE,
   normalizeTelegramUsername,
+  resolveWorkdirPath,
   splitPlainText,
   sleep,
   toErrorMessage
@@ -26,6 +29,7 @@ import {
 
 export const TELEGRAM_COMMANDS = [
   { command: "status", description: "Show current Codex status" },
+  { command: "workdir", description: "Show or change the bot workdir" },
   { command: "yolo", description: "Toggle full-access Codex mode" },
   { command: "model", description: "Set model for future runs" },
   { command: "reasoning", description: "Set reasoning effort for future runs" },
@@ -93,7 +97,8 @@ export class ChatSession {
     logger,
     chatId,
     createCodexRun = startCodexRun,
-    resolveContextLength = readContextLengthForThread
+    resolveContextLength = readContextLengthForThread,
+    resolveHomeDir
   }) {
     this.botConfig = botConfig;
     this.botApi = botApi;
@@ -116,6 +121,7 @@ export class ChatSession {
     this.typingTimer = null;
     this.createCodexRun = createCodexRun;
     this.resolveContextLength = resolveContextLength;
+    this.resolveHomeDir = resolveHomeDir;
     this.progressMessageId = null;
     this.lastRenderedProgressText = null;
   }
@@ -286,57 +292,198 @@ export class ChatSession {
     }
   }
 
-  async updateThreadId(threadId) {
-    this.threadId = threadId;
-    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
-      threadId,
+  snapshotPersistedState() {
+    return {
+      threadId: this.threadId,
       lastUsage: this.lastUsage,
       cumulativeUsage: this.cumulativeUsage
-    });
+    };
+  }
+
+  restorePersistedState(snapshot) {
+    this.threadId = snapshot.threadId;
+    this.lastUsage = snapshot.lastUsage;
+    this.cumulativeUsage = snapshot.cumulativeUsage;
+  }
+
+  async updateThreadId(threadId) {
+    const previousState = this.snapshotPersistedState();
+
+    try {
+      await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+        threadId,
+        lastUsage: this.lastUsage,
+        cumulativeUsage: this.cumulativeUsage
+      });
+    } catch (error) {
+      this.restorePersistedState(previousState);
+      throw error;
+    }
+
+    this.threadId = threadId;
   }
 
   async updateUsage({ lastUsage, cumulativeUsage }) {
+    const previousState = this.snapshotPersistedState();
+
+    try {
+      await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+        threadId: this.threadId,
+        lastUsage,
+        cumulativeUsage
+      });
+    } catch (error) {
+      this.restorePersistedState(previousState);
+      throw error;
+    }
+
     this.lastUsage = lastUsage;
     this.cumulativeUsage = cumulativeUsage;
-    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
-      threadId: this.threadId,
-      lastUsage,
-      cumulativeUsage
-    });
   }
 
   async clearPersistedState() {
+    const previousState = this.snapshotPersistedState();
+
+    try {
+      await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+        threadId: null,
+        lastUsage: null,
+        cumulativeUsage: null
+      });
+    } catch (error) {
+      this.restorePersistedState(previousState);
+      throw error;
+    }
+
     this.threadId = null;
     this.lastUsage = null;
     this.cumulativeUsage = null;
-    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
-      threadId: null,
-      lastUsage: null,
-      cumulativeUsage: null
-    });
+  }
+
+  async persistBotConfig(patch) {
+    const previousValues = {};
+    for (const [key] of Object.entries(patch)) {
+      previousValues[key] = this.botConfig[key];
+    }
+
+    await this.configStore.patchBotConfig(this.botConfig.name, patch);
+    Object.assign(this.botConfig, patch);
+
+    return previousValues;
+  }
+
+  async rollbackBotConfig(previousValues) {
+    try {
+      await this.configStore.patchBotConfig(this.botConfig.name, previousValues);
+    } catch (error) {
+      this.logger(`config rollback failed: ${toErrorMessage(error)}`);
+      throw error;
+    }
+
+    Object.assign(this.botConfig, previousValues);
+  }
+
+  workdirValidationError() {
+    return `Invalid workdir. ${INVALID_WORKDIR_MESSAGE}`;
+  }
+
+  async resolveRequestedWorkdir(args) {
+    try {
+      return await resolveWorkdirPath(args, {
+        homeDir: this.resolveHomeDir ? this.resolveHomeDir() : undefined
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === INVALID_WORKDIR_MESSAGE) {
+        throw new Error(this.workdirValidationError());
+      }
+      throw error;
+    }
+  }
+
+  async handleWorkdir(args) {
+    const requestedWorkdir = normalizeSettingArgument(args);
+    if (!requestedWorkdir) {
+      await this.sendText(`Current workdir: ${this.botConfig.workdir}.`);
+      return;
+    }
+
+    const homeDir = this.resolveHomeDir ? this.resolveHomeDir() : undefined;
+    let normalizedWorkdir;
+    try {
+      normalizedWorkdir = expandWorkdirPath(requestedWorkdir, { homeDir });
+    } catch (error) {
+      if (error instanceof Error && error.message === INVALID_WORKDIR_MESSAGE) {
+        await this.sendText(this.workdirValidationError());
+        return;
+      }
+      await this.sendText(toErrorMessage(error));
+      return;
+    }
+
+    if (normalizedWorkdir === this.botConfig.workdir) {
+      await this.sendText(`Workdir is already set to ${normalizedWorkdir}.`);
+      return;
+    }
+
+    let nextWorkdir;
+    try {
+      nextWorkdir = await this.resolveRequestedWorkdir(normalizedWorkdir);
+    } catch (error) {
+      await this.sendText(toErrorMessage(error));
+      return;
+    }
+
+    const previousState = this.snapshotPersistedState();
+    const previousWorkdir = this.botConfig.workdir;
+
+    this.queue = [];
+    await this.abortCurrentRun();
+    this.stopTyping();
+    this.resetTransientTurnState();
+
+    try {
+      await this.persistBotConfig({ workdir: nextWorkdir });
+    } catch (error) {
+      await this.sendText(`Failed to persist workdir setting: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    try {
+      await this.clearPersistedState();
+    } catch (error) {
+      this.restorePersistedState(previousState);
+
+      try {
+        await this.rollbackBotConfig({ workdir: previousWorkdir });
+      } catch (rollbackError) {
+        await this.sendText(
+          `Failed to reset session after changing workdir: ${toErrorMessage(error)}. Config rollback also failed: ${toErrorMessage(rollbackError)}`
+        );
+        return;
+      }
+
+      await this.sendText(`Failed to reset session after changing workdir: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    await this.sendText(
+      `Workdir set to ${nextWorkdir}. Started a new session. The next message will open a fresh Codex thread.`
+    );
   }
 
   async persistRuntimeSettings(patch) {
-    const previousDefaults = {
-      yolo: this.botConfig.yolo,
-      model: this.botConfig.model,
-      reasoningEffort: this.botConfig.reasoningEffort
-    };
-
-    await this.configStore.patchBotConfig(this.botConfig.name, patch);
+    const previousDefaults = await this.persistBotConfig(patch);
 
     try {
       await this.stateStore.patchChatState(this.botConfig.name, this.chatId, patch);
     } catch (error) {
       try {
-        await this.configStore.patchBotConfig(this.botConfig.name, previousDefaults);
+        await this.rollbackBotConfig(previousDefaults);
       } catch (rollbackError) {
-        this.logger(`config rollback failed: ${toErrorMessage(rollbackError)}`);
+        this.logger(`runtime settings rollback failed: ${toErrorMessage(rollbackError)}`);
       }
       throw error;
     }
-
-    Object.assign(this.botConfig, patch);
   }
 
   async applyRuntimeSettings(patch) {
@@ -689,6 +836,9 @@ export class BotRuntime {
     switch (parsedCommand?.command) {
       case "status":
         await session.handleStatus();
+        return;
+      case "workdir":
+        await session.handleWorkdir(parsedCommand.args);
         return;
       case "yolo":
         await session.handleYolo(parsedCommand.args);
