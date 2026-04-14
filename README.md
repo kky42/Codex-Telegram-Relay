@@ -69,10 +69,11 @@ Notes:
 - `turn.completed` updates the persisted cumulative usage totals.
 - The latest context length is read from the matching Codex rollout log, using the final `token_count.last_token_usage` event.
 - User-visible Telegram messages only come from:
-  - completed `agent_message` items
-  - completed non-message items rendered as their item type, such as `command_execution`
+  - completed `agent_message` items as the final reply text
   - terminal errors
-- Start/end and other progress-only events are filtered out of the user-visible chat.
+- Non-message items such as `reasoning`, `web_search`, and `command_execution` reuse a single in-flight Telegram message that is edited as progress updates arrive.
+- When the final `agent_message` arrives, it replaces that in-flight progress message instead of adding another transient item message.
+- Start/end events do not create additional chat messages beyond the single in-flight progress message.
 
 ## Slash Commands
 

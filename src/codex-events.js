@@ -20,6 +20,9 @@ export function eventToActions(event) {
     return [];
   }
 
+  const item = event.item;
+  const isItemRecord = item && typeof item === "object" && typeof item.type === "string";
+
   switch (event.type) {
     case "thread.started":
       return [{ kind: "thread_started", threadId: event.thread_id ?? null }];
@@ -48,9 +51,14 @@ export function eventToActions(event) {
           text: `Codex error: ${event.message ?? "unknown error"}`
         }
       ];
+    case "item.started":
+      if (!isItemRecord || item.type === "agent_message") {
+        return [];
+      }
+
+      return [{ kind: "progress", text: item.type }];
     case "item.completed": {
-      const item = event.item;
-      if (!item || typeof item !== "object" || typeof item.type !== "string") {
+      if (!isItemRecord) {
         return [];
       }
 
@@ -58,7 +66,7 @@ export function eventToActions(event) {
         return [{ kind: "message", text: item.text ?? "" }];
       }
 
-      return [{ kind: "message", text: item.type }];
+      return [{ kind: "progress", text: item.type }];
     }
     default:
       return [];

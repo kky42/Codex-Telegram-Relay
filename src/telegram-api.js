@@ -77,6 +77,21 @@ export class TelegramBotApi {
     return this.call("sendMessage", payload, options);
   }
 
+  editMessageText({ chatId, messageId, text, parseMode = null }, options = {}) {
+    const payload = {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      disable_web_page_preview: true
+    };
+
+    if (parseMode) {
+      payload.parse_mode = parseMode;
+    }
+
+    return this.call("editMessageText", payload, options);
+  }
+
   sendChatAction({ chatId, action = "typing" }, options = {}) {
     return this.call(
       "sendChatAction",

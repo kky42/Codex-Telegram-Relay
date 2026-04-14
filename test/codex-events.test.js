@@ -25,7 +25,11 @@ test("fixture events produce only visible actions and usage updates", async () =
       threadId: "019d89e6-1949-7af1-aa82-9d13d9adc4a3"
     },
     {
-      kind: "message",
+      kind: "progress",
+      text: "command_execution"
+    },
+    {
+      kind: "progress",
       text: "command_execution"
     },
     {
