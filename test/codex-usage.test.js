@@ -31,8 +31,7 @@ test("buildTurnUsage subtracts prior cumulative totals for resumed runs", () => 
       contextLength: 12345,
       inputTokens: 4000,
       outputTokens: 120,
-      cacheReadTokens: 3000,
-      totalTokens: 4120
+      cacheReadTokens: 3000
     }
   );
 });
@@ -53,8 +52,7 @@ test("buildTurnUsage leaves deltas unknown when resuming without prior totals", 
       contextLength: 12345,
       inputTokens: null,
       outputTokens: null,
-      cacheReadTokens: null,
-      totalTokens: null
+      cacheReadTokens: null
     }
   );
 });
@@ -68,8 +66,7 @@ test("readCodexFinalCallTokenUsageFromRollout returns the last token_count usage
     inputTokens: 1540,
     cachedInputTokens: 910,
     outputTokens: 85,
-    reasoningOutputTokens: 0,
-    totalTokens: 1625
+    reasoningOutputTokens: 0
   });
 });
 

@@ -26,8 +26,7 @@ export function renderStatusMessage({ isRunning, workdir, yolo, usage, queue }) 
     `running: ${isRunning ? "yes" : "no"}`,
     `workdir: ${workdir}`,
     `yolo: ${formatYolo(yolo)}`,
-    `recent_context_length: ${usage.contextLength}`,
-    `recent_usage: ${usage.totalTokens}`,
+    `context_length: ${usage.contextLength}`,
     "queue:",
     summarizeQueue(queue)
   ];

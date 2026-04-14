@@ -77,7 +77,7 @@ Notes:
 
 ## Slash Commands
 
-- `/status` shows whether Codex is running, the workdir, the latest context length, the latest per-turn usage total, and the queued messages.
+- `/status` shows whether Codex is running, the workdir, the current context length, and the queued messages.
 - `/yolo` toggles between read-only and full-access for future runs.
 - `/yolo on` switches future runs to full-access mode.
 - `/yolo off` switches future runs to read-only mode.
@@ -89,7 +89,15 @@ Notes:
 Run tests with:
 
 ```bash
-npm test
+source ~/.zshrc >/dev/null 2>&1 && npm test
 ```
+
+To manually audit multi-round `context_length` growth with real Codex runs, use:
+
+```bash
+source ~/.zshrc >/dev/null 2>&1 && npm run verify:context-length -- --workdir /path/to/project --message "first prompt" --message "follow up"
+```
+
+The verification script prints each round's raw `context_length`, the current `/status` output, the thread id, and the delta from the prior round so you can review whether context grew as expected and whether `/status` matches the stored value.
 
 This project uses only Node.js built-ins. No runtime dependencies are required.

@@ -6,26 +6,6 @@ function defaultState() {
   return { bots: {} };
 }
 
-function normalizeLegacyCumulativeUsage(chatState) {
-  const lastUsage = chatState?.lastUsage;
-  if (!lastUsage || typeof lastUsage !== "object") {
-    return null;
-  }
-
-  if (
-    "contextLength" in lastUsage ||
-    "context_length" in lastUsage ||
-    "cacheReadTokens" in lastUsage ||
-    "cache_read_tokens" in lastUsage ||
-    "totalTokens" in lastUsage ||
-    "total_tokens" in lastUsage
-  ) {
-    return null;
-  }
-
-  return normalizeCumulativeUsage(lastUsage);
-}
-
 export class StateStore {
   constructor(statePath) {
     this.statePath = statePath;
@@ -48,8 +28,7 @@ export class StateStore {
     return {
       threadId: typeof chatState.threadId === "string" && chatState.threadId ? chatState.threadId : null,
       lastUsage: normalizeTurnUsage(chatState.lastUsage),
-      cumulativeUsage:
-        normalizeCumulativeUsage(chatState.cumulativeUsage) ?? normalizeLegacyCumulativeUsage(chatState),
+      cumulativeUsage: normalizeCumulativeUsage(chatState.cumulativeUsage),
       yolo: readPersistedYolo(chatState)
     };
   }

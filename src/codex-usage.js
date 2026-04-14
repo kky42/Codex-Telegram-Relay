@@ -58,10 +58,12 @@ export function normalizeTurnUsage(usage) {
   const hasTurnFields =
     hasOwn(usage, "contextLength") ||
     hasOwn(usage, "context_length") ||
+    hasOwn(usage, "inputTokens") ||
+    hasOwn(usage, "input_tokens") ||
+    hasOwn(usage, "outputTokens") ||
+    hasOwn(usage, "output_tokens") ||
     hasOwn(usage, "cacheReadTokens") ||
-    hasOwn(usage, "cache_read_tokens") ||
-    hasOwn(usage, "totalTokens") ||
-    hasOwn(usage, "total_tokens");
+    hasOwn(usage, "cache_read_tokens");
 
   if (!hasTurnFields) {
     return null;
@@ -71,13 +73,12 @@ export function normalizeTurnUsage(usage) {
   const inputTokens = readNullableNumber(usage, "inputTokens", "input_tokens");
   const outputTokens = readNullableNumber(usage, "outputTokens", "output_tokens");
   const cacheReadTokens = readNullableNumber(usage, "cacheReadTokens", "cache_read_tokens");
-  const totalTokens = readNullableNumber(usage, "totalTokens", "total_tokens");
 
-  if (![contextLength, inputTokens, outputTokens, cacheReadTokens, totalTokens].every((value) => value === null || Number.isFinite(value))) {
+  if (![contextLength, inputTokens, outputTokens, cacheReadTokens].every((value) => value === null || Number.isFinite(value))) {
     return null;
   }
 
-  return { contextLength, inputTokens, outputTokens, cacheReadTokens, totalTokens };
+  return { contextLength, inputTokens, outputTokens, cacheReadTokens };
 }
 
 export function buildTurnUsage({ contextLength, currentCumulativeUsage, previousCumulativeUsage, isResume }) {
@@ -87,8 +88,7 @@ export function buildTurnUsage({ contextLength, currentCumulativeUsage, previous
       contextLength: Number.isFinite(contextLength) ? contextLength : null,
       inputTokens: null,
       outputTokens: null,
-      cacheReadTokens: null,
-      totalTokens: null
+      cacheReadTokens: null
     };
   }
 
@@ -100,8 +100,7 @@ export function buildTurnUsage({ contextLength, currentCumulativeUsage, previous
       contextLength: Number.isFinite(contextLength) ? contextLength : null,
       inputTokens: null,
       outputTokens: null,
-      cacheReadTokens: null,
-      totalTokens: null
+      cacheReadTokens: null
     };
   }
 
@@ -114,8 +113,7 @@ export function buildTurnUsage({ contextLength, currentCumulativeUsage, previous
       contextLength: Number.isFinite(contextLength) ? contextLength : null,
       inputTokens: null,
       outputTokens: null,
-      cacheReadTokens: null,
-      totalTokens: null
+      cacheReadTokens: null
     };
   }
 
@@ -123,8 +121,7 @@ export function buildTurnUsage({ contextLength, currentCumulativeUsage, previous
     contextLength: Number.isFinite(contextLength) ? contextLength : null,
     inputTokens,
     outputTokens,
-    cacheReadTokens,
-    totalTokens: inputTokens + outputTokens
+    cacheReadTokens
   };
 }
 
@@ -303,14 +300,12 @@ export async function readCodexFinalCallTokenUsageFromRollout(rolloutPath) {
         const cachedInputTokens = asFiniteNumber(lastUsage.cached_input_tokens);
         const outputTokens = asFiniteNumber(lastUsage.output_tokens);
         const reasoningOutputTokens = asFiniteNumber(lastUsage.reasoning_output_tokens);
-        const totalTokens = asFiniteNumber(lastUsage.total_tokens);
 
         if (
           inputTokens === null ||
           cachedInputTokens === null ||
           outputTokens === null ||
-          reasoningOutputTokens === null ||
-          totalTokens === null
+          reasoningOutputTokens === null
         ) {
           continue;
         }
@@ -319,8 +314,7 @@ export async function readCodexFinalCallTokenUsageFromRollout(rolloutPath) {
           inputTokens,
           cachedInputTokens,
           outputTokens,
-          reasoningOutputTokens,
-          totalTokens
+          reasoningOutputTokens
         };
       }
 
