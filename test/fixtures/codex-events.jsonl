@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"019d89e6-1949-7af1-aa82-9d13d9adc4a3"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc pwd","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc pwd","aggregated_output":"/private/tmp/codex-telegram-relay-probe\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"command-probe-ok"}}
+{"type":"turn.completed","usage":{"input_tokens":20971,"cached_input_tokens":15616,"output_tokens":181}}

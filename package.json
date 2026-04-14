@@ -1,0 +1,28 @@
+{
+  "name": "codex-telegram-relay",
+  "version": "0.1.0",
+  "description": "Lightweight Codex x Telegram bot relay",
+  "type": "module",
+  "bin": {
+    "codex-telegram-relay": "./bin/codex-telegram-relay.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node ./bin/codex-telegram-relay.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "codex",
+    "telegram",
+    "bot"
+  ],
+  "license": "MIT"
+}
