@@ -4,7 +4,7 @@
   "description": "Lightweight Codex x Telegram bot relay",
   "type": "module",
   "bin": {
-    "codex-telegram-relay": "./bin/codex-telegram-relay.js"
+    "codex-telegram-relay": "bin/codex-telegram-relay.js"
   },
   "files": [
     "bin",
