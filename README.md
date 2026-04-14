@@ -31,15 +31,12 @@ Example config:
 
 ```json
 {
+  "allowedUsernames": ["your-telegram-username"],
   "bots": [
     {
       "name": "primary",
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
-      "workdir": "/Users/you/project",
-      "allowedUsernames": ["your-telegram-username"],
-      "allowedUserIds": [],
-      "codexArgs": ["--search"],
-      "runningIndicator": "typing"
+      "workdir": "/Users/you/project"
     }
   ]
 }
@@ -47,10 +44,13 @@ Example config:
 
 Notes:
 
-- `workdir` is optional. If omitted, the relay uses your home directory.
-- `allowedUsernames` and `allowedUserIds` act as a whitelist. At least one must be configured per bot.
-- `codexArgs` is appended to `codex exec` and `codex exec resume`.
-- `runningIndicator` supports `typing` or `off`.
+- Top-level `allowedUsernames` is optional and defaults to an empty array. It applies to every bot.
+- Bot-level `allowedUsernames` is optional and is merged with the top-level list for that bot.
+- `name` must be unique and may contain only letters, numbers, `_`, and `-`.
+- `workdir` is optional. If omitted, the relay uses your home directory. The configured path must already exist.
+- `allowedUsernames` entries are matched case-insensitively and may be written with or without a leading `@`.
+- If you do not know your Telegram username, send the bot any message once. The unauthorized reply tells you which username to put in `allowedUsernames`.
+- Accounts without a Telegram username are not allowed until a username is set in Telegram.
 - Multiple bots can be configured in the same file and run from one process.
 
 ## Behavior

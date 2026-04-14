@@ -3,36 +3,62 @@ import assert from "node:assert/strict";
 
 import { normalizeConfig } from "../src/config.js";
 
-test("normalizeConfig applies defaults and normalizes usernames", () => {
+test("normalizeConfig applies top-level allowed usernames and normalizes usernames", () => {
   const config = normalizeConfig({
+    allowedUsernames: ["@OwnerUser"],
     bots: [
       {
         name: "primary",
         token: "token-1",
-        allowedUsernames: ["@AllowedUser"],
-        codexArgs: ["--search"]
+        allowedUsernames: ["@AllowedUser"]
       }
     ]
   });
 
   assert.equal(config.bots[0].name, "primary");
-  assert.equal(config.bots[0].runningIndicator, "typing");
-  assert.equal(config.bots[0].allowedUsernames[0], "alloweduser");
-  assert.deepEqual(config.bots[0].allowedUserIds, []);
-  assert.deepEqual(config.bots[0].codexArgs, ["--search"]);
+  assert.deepEqual(config.bots[0].allowedUsernames, ["owneruser", "alloweduser"]);
 });
 
-test("normalizeConfig rejects bots without authorization rules", () => {
+test("normalizeConfig allows empty allowed usernames by default", () => {
+  const config = normalizeConfig({
+    bots: [
+      {
+        name: "primary",
+        token: "token-1"
+      }
+    ]
+  });
+
+  assert.deepEqual(config.bots[0].allowedUsernames, []);
+});
+
+test("normalizeConfig rejects invalid bot names", () => {
+  assert.throws(
+    () =>
+      normalizeConfig({
+        bots: [
+          {
+            name: "primary bot",
+            token: "token-1"
+          }
+        ]
+      }),
+    /name must contain only letters, numbers, "_" or "-"/
+  );
+});
+
+test("normalizeConfig rejects missing workdir paths", () => {
   assert.throws(
     () =>
       normalizeConfig({
         bots: [
           {
             name: "primary",
-            token: "token-1"
+            token: "token-1",
+            workdir: "/definitely/not/a/real/path"
           }
         ]
       }),
-    /at least one allowed username or allowed user id/
+    /workdir must point to an existing path/
   );
 });

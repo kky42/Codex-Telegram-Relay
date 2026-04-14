@@ -43,6 +43,15 @@ export function parseCommand(text, botUsername) {
   return { command: commandName.toLowerCase() };
 }
 
+function unauthorizedMessage(user) {
+  const username = normalizeTelegramUsername(user?.username);
+  if (username) {
+    return `You are not authorized to use this bot. Your Telegram username is @${username}. Add "${username}" to allowedUsernames in the relay config.`;
+  }
+
+  return "You are not authorized to use this bot. Your Telegram account has no username set. Add one in Telegram Settings, then add it to allowedUsernames in the relay config.";
+}
+
 export class ChatSession {
   constructor({
     botConfig,
@@ -101,7 +110,7 @@ export class ChatSession {
   }
 
   startTyping() {
-    if (this.botConfig.runningIndicator !== "typing" || this.typingTimer) {
+    if (this.typingTimer) {
       return;
     }
 
@@ -242,7 +251,6 @@ export class ChatSession {
       workdir: this.botConfig.workdir,
       threadId: this.threadId,
       message: nextMessage,
-      codexArgs: this.botConfig.codexArgs,
       onEvent: async (event) => {
         const actions = eventToActions(event);
         for (const action of actions) {
@@ -352,14 +360,7 @@ export class BotRuntime {
 
   isAuthorized(user) {
     const username = normalizeTelegramUsername(user?.username);
-    const userId = Number(user?.id);
-    if (username && this.botConfig.allowedUsernames.includes(username)) {
-      return true;
-    }
-    if (Number.isInteger(userId) && this.botConfig.allowedUserIds.includes(userId)) {
-      return true;
-    }
-    return false;
+    return Boolean(username && this.botConfig.allowedUsernames.includes(username));
   }
 
   async initialize() {
@@ -386,7 +387,7 @@ export class BotRuntime {
     }
 
     if (!this.isAuthorized(message.from)) {
-      await this.sendDirectMessage(chatId, "You are not authorized to use this bot.");
+      await this.sendDirectMessage(chatId, unauthorizedMessage(message.from));
       return;
     }
 

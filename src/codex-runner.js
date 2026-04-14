@@ -2,15 +2,8 @@ import { spawn } from "node:child_process";
 
 import { parseJsonlLine } from "./codex-events.js";
 
-export function buildCodexArgs({ workdir, threadId, message, codexArgs = [] }) {
-  const baseArgs = [
-    "-C",
-    workdir,
-    "exec",
-    "--json",
-    "--skip-git-repo-check",
-    ...codexArgs
-  ];
+export function buildCodexArgs({ workdir, threadId, message }) {
+  const baseArgs = ["-C", workdir, "exec", "--json", "--skip-git-repo-check"];
 
   if (threadId) {
     return [...baseArgs, "resume", threadId, message];
@@ -23,11 +16,10 @@ export function startCodexRun({
   workdir,
   threadId,
   message,
-  codexArgs = [],
   onEvent = async () => {},
   onStdErr = () => {}
 }) {
-  const args = buildCodexArgs({ workdir, threadId, message, codexArgs });
+  const args = buildCodexArgs({ workdir, threadId, message });
   const child = spawn("codex", args, {
     cwd: workdir,
     env: process.env,

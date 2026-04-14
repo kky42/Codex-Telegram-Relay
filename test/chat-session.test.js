@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ChatSession } from "../src/bot-runtime.js";
+import { BotRuntime, ChatSession } from "../src/bot-runtime.js";
 import { StateStore } from "../src/state-store.js";
 import { TelegramApiError } from "../src/telegram-api.js";
 
@@ -89,10 +89,7 @@ async function createSession(options = {}) {
       name: "primary",
       token: "token",
       workdir: "/tmp/project",
-      allowedUsernames: ["alloweduser"],
-      allowedUserIds: [],
-      codexArgs: [],
-      runningIndicator: "off"
+      allowedUsernames: ["alloweduser"]
     },
     botApi: fakeBotApi,
     stateStore,
@@ -101,6 +98,8 @@ async function createSession(options = {}) {
     createCodexRun: (params) => runnerFactory.createRun(params),
     resolveContextLength: options.resolveContextLength ?? (async () => 21300)
   });
+  session.startTyping = () => {};
+  session.stopTyping = () => {};
 
   return { session, fakeBotApi, runnerFactory, stateStore, statePath };
 }
@@ -314,4 +313,33 @@ test("sendText falls back to plain text when Telegram markdown parsing fails", a
       text: "a_b"
     }
   ]);
+});
+
+test("unauthorized users are told which Telegram username to allow", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
+  const stateStore = new StateStore(path.join(tempDir, "state.json"));
+  await stateStore.load();
+
+  const fakeBotApi = new FakeBotApi();
+  const runtime = new BotRuntime({
+    botConfig: {
+      name: "primary",
+      token: "token",
+      workdir: "/tmp/project",
+      allowedUsernames: ["alloweduser"]
+    },
+    botApi: fakeBotApi,
+    stateStore
+  });
+
+  await runtime.handleMessage({
+    chat: { id: 1001, type: "private" },
+    from: { id: 42, username: "OtherUser" },
+    text: "hello"
+  });
+
+  assert.equal(
+    fakeBotApi.messages.at(-1).text,
+    'You are not authorized to use this bot\\. Your Telegram username is @otheruser\\. Add "otheruser" to allowedUsernames in the relay config\\.'
+  );
 });

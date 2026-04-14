@@ -6,15 +6,13 @@ import { buildCodexArgs } from "../src/codex-runner.js";
 test("buildCodexArgs uses exec for a fresh thread", () => {
   assert.deepEqual(buildCodexArgs({
     workdir: "/tmp/project",
-    message: "hello",
-    codexArgs: ["--search"]
+    message: "hello"
   }), [
     "-C",
     "/tmp/project",
     "exec",
     "--json",
     "--skip-git-repo-check",
-    "--search",
     "hello"
   ]);
 });

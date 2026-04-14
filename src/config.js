@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -20,6 +21,12 @@ function assertArrayOfStrings(value, fieldPath) {
   }
 }
 
+function normalizeAllowedUsernames(value, fieldPath) {
+  const usernames = value ?? [];
+  assertArrayOfStrings(usernames, fieldPath);
+  return usernames.map(normalizeTelegramUsername).filter(Boolean);
+}
+
 export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
   if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) {
     throw new Error("Config root must be a JSON object");
@@ -29,6 +36,10 @@ export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
     throw new Error("Config must include a non-empty bots array");
   }
 
+  const defaultAllowedUsernames = normalizeAllowedUsernames(
+    rawConfig.allowedUsernames,
+    "allowedUsernames"
+  );
   const botNames = new Set();
   const normalizedBots = rawConfig.bots.map((bot, index) => {
     const prefix = `bots[${index}]`;
@@ -40,6 +51,9 @@ export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
       throw new Error(`${prefix}.name must be a non-empty string`);
     }
     const name = bot.name.trim();
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      throw new Error(`${prefix}.name must contain only letters, numbers, "_" or "-"`);
+    }
     if (botNames.has(name)) {
       throw new Error(`Duplicate bot name: ${name}`);
     }
@@ -49,46 +63,20 @@ export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
       throw new Error(`${prefix}.token must be a non-empty string`);
     }
 
-    const allowedUsernames = bot.allowedUsernames ?? [];
-    const allowedUserIds = bot.allowedUserIds ?? [];
-    const codexArgs = bot.codexArgs ?? [];
-
-    assertArrayOfStrings(allowedUsernames, `${prefix}.allowedUsernames`);
-    assertArrayOfStrings(codexArgs, `${prefix}.codexArgs`);
-
-    if (!Array.isArray(allowedUserIds)) {
-      throw new Error(`${prefix}.allowedUserIds must be an array`);
-    }
-
-    const normalizedUserIds = allowedUserIds.map((value) => {
-      const numberValue = Number(value);
-      if (!Number.isInteger(numberValue)) {
-        throw new Error(`${prefix}.allowedUserIds must contain only integer values`);
-      }
-      return numberValue;
-    });
-
-    if (normalizedUserIds.length === 0 && allowedUsernames.length === 0) {
-      throw new Error(
-        `${prefix} must define at least one allowed username or allowed user id`
-      );
-    }
-
-    const runningIndicator = bot.runningIndicator ?? "typing";
-    if (!["typing", "off"].includes(runningIndicator)) {
-      throw new Error(`${prefix}.runningIndicator must be "typing" or "off"`);
-    }
-
     const workdir = path.resolve(bot.workdir ?? os.homedir());
+    if (!existsSync(workdir)) {
+      throw new Error(`${prefix}.workdir must point to an existing path`);
+    }
+    const allowedUsernames = normalizeAllowedUsernames(
+      bot.allowedUsernames,
+      `${prefix}.allowedUsernames`
+    );
 
     return {
       name,
       token: bot.token.trim(),
       workdir,
-      allowedUsernames: allowedUsernames.map(normalizeTelegramUsername).filter(Boolean),
-      allowedUserIds: normalizedUserIds,
-      codexArgs: codexArgs.map((entry) => entry.trim()).filter(Boolean),
-      runningIndicator
+      allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])]
     };
   });
 
