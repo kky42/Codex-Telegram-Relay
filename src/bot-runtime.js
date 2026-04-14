@@ -2,6 +2,11 @@ import { eventToActions } from "./codex-events.js";
 import { startCodexRun } from "./codex-runner.js";
 import { buildTurnUsage, readContextLengthForThread } from "./codex-usage.js";
 import {
+  formatYolo,
+  parseYoloArgument,
+  YOLO_OFF
+} from "./yolo.js";
+import {
   escapeTelegramMarkdown,
   renderStatusMessage
 } from "./render.js";
@@ -16,6 +21,7 @@ import {
 
 export const TELEGRAM_COMMANDS = [
   { command: "status", description: "Show current Codex status" },
+  { command: "yolo", description: "Toggle full-access Codex mode" },
   { command: "abort", description: "Abort current run and clear queued messages" },
   { command: "new", description: "Start a fresh session and clear context" }
 ];
@@ -40,7 +46,10 @@ export function parseCommand(text, botUsername) {
     return { ignored: true };
   }
 
-  return { command: commandName.toLowerCase() };
+  return {
+    command: commandName.toLowerCase(),
+    args: trimmed.slice(token.length).trim()
+  };
 }
 
 function unauthorizedMessage(user) {
@@ -72,6 +81,7 @@ export class ChatSession {
     this.threadId = persisted.threadId;
     this.lastUsage = persisted.lastUsage;
     this.cumulativeUsage = persisted.cumulativeUsage;
+    this.yolo = persisted.yolo ?? botConfig.yolo ?? YOLO_OFF;
     this.queue = [];
     this.isRunning = false;
     this.activeRun = null;
@@ -161,13 +171,25 @@ export class ChatSession {
     this.threadId = null;
     this.lastUsage = null;
     this.cumulativeUsage = null;
-    await this.stateStore.clearChatState(this.botConfig.name, this.chatId);
+    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+      threadId: null,
+      lastUsage: null,
+      cumulativeUsage: null
+    });
+  }
+
+  async updateYolo(yolo) {
+    this.yolo = yolo;
+    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+      yolo
+    });
   }
 
   statusText() {
     return renderStatusMessage({
       isRunning: this.isRunning,
       workdir: this.botConfig.workdir,
+      yolo: this.yolo,
       usage: {
         contextLength: formatTokenCountK(this.lastUsage?.contextLength),
         totalTokens: formatTokenCountK(this.lastUsage?.totalTokens)
@@ -178,6 +200,29 @@ export class ChatSession {
 
   async handleStatus() {
     await this.sendText(this.statusText());
+  }
+
+  async handleYolo(args) {
+    const normalized = String(args || "").trim();
+    const nextYolo = normalized ? parseYoloArgument(normalized) : !this.yolo;
+    if (normalized && nextYolo === null) {
+      await this.sendText(
+        "Unknown yolo value. Use /yolo, /yolo on, or /yolo off."
+      );
+      return;
+    }
+
+    const previousYolo = this.yolo;
+    await this.updateYolo(nextYolo);
+
+    if (this.isRunning) {
+      await this.sendText(
+        `Yolo set to ${formatYolo(nextYolo)}. The current run stays on ${formatYolo(previousYolo)}; the next run will use ${formatYolo(nextYolo)}.`
+      );
+      return;
+    }
+
+    await this.sendText(`Yolo set to ${formatYolo(nextYolo)}.`);
   }
 
   async abortCurrentRun() {
@@ -251,6 +296,7 @@ export class ChatSession {
       workdir: this.botConfig.workdir,
       threadId: this.threadId,
       message: nextMessage,
+      yolo: this.yolo,
       onEvent: async (event) => {
         const actions = eventToActions(event);
         for (const action of actions) {
@@ -405,6 +451,9 @@ export class BotRuntime {
     switch (parsedCommand?.command) {
       case "status":
         await session.handleStatus();
+        return;
+      case "yolo":
+        await session.handleYolo(parsedCommand.args);
         return;
       case "abort":
         await session.handleAbort();

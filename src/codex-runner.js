@@ -1,9 +1,18 @@
 import { spawn } from "node:child_process";
 
 import { parseJsonlLine } from "./codex-events.js";
+import { YOLO_OFF } from "./yolo.js";
 
-export function buildCodexArgs({ workdir, threadId, message }) {
-  const baseArgs = ["-C", workdir, "exec", "--json", "--skip-git-repo-check"];
+export function buildCodexArgs({
+  workdir,
+  threadId,
+  message,
+  yolo = YOLO_OFF
+}) {
+  const modeArgs = yolo
+    ? ["--dangerously-bypass-approvals-and-sandbox"]
+    : ["--sandbox", "read-only"];
+  const baseArgs = ["-C", workdir, "exec", "--json", "--skip-git-repo-check", ...modeArgs];
 
   if (threadId) {
     return [...baseArgs, "resume", threadId, message];
@@ -16,10 +25,11 @@ export function startCodexRun({
   workdir,
   threadId,
   message,
+  yolo = YOLO_OFF,
   onEvent = async () => {},
   onStdErr = () => {}
 }) {
-  const args = buildCodexArgs({ workdir, threadId, message });
+  const args = buildCodexArgs({ workdir, threadId, message, yolo });
   const child = spawn("codex", args, {
     cwd: workdir,
     env: process.env,

@@ -1,4 +1,5 @@
 import { normalizeCumulativeUsage, normalizeTurnUsage } from "./codex-usage.js";
+import { readPersistedYolo } from "./yolo.js";
 import { readJsonFile, writeJsonFileAtomic } from "./utils.js";
 
 function defaultState() {
@@ -47,7 +48,9 @@ export class StateStore {
     return {
       threadId: typeof chatState.threadId === "string" && chatState.threadId ? chatState.threadId : null,
       lastUsage: normalizeTurnUsage(chatState.lastUsage),
-      cumulativeUsage: normalizeCumulativeUsage(chatState.cumulativeUsage) ?? normalizeLegacyCumulativeUsage(chatState)
+      cumulativeUsage:
+        normalizeCumulativeUsage(chatState.cumulativeUsage) ?? normalizeLegacyCumulativeUsage(chatState),
+      yolo: readPersistedYolo(chatState)
     };
   }
 
@@ -74,6 +77,10 @@ export class StateStore {
 
       if (!next.cumulativeUsage) {
         delete next.cumulativeUsage;
+      }
+
+      if (typeof next.yolo !== "boolean") {
+        delete next.yolo;
       }
 
       if (Object.keys(next).length === 0) {

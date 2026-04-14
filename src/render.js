@@ -1,4 +1,5 @@
 import { splitPlainText, truncateText } from "./utils.js";
+import { formatYolo } from "./yolo.js";
 
 const MARKDOWN_V2_SPECIAL_CHARS = /[_*[\]()~`>#+\-=|{}.!\\]/g;
 
@@ -20,10 +21,11 @@ export function summarizeQueue(queue) {
     .join("\n");
 }
 
-export function renderStatusMessage({ isRunning, workdir, usage, queue }) {
+export function renderStatusMessage({ isRunning, workdir, yolo, usage, queue }) {
   const lines = [
     `running: ${isRunning ? "yes" : "no"}`,
     `workdir: ${workdir}`,
+    `yolo: ${formatYolo(yolo)}`,
     `recent_context_length: ${usage.contextLength}`,
     `recent_usage: ${usage.totalTokens}`,
     "queue:",

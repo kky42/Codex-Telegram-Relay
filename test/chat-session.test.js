@@ -89,7 +89,8 @@ async function createSession(options = {}) {
       name: "primary",
       token: "token",
       workdir: "/tmp/project",
-      allowedUsernames: ["alloweduser"]
+      allowedUsernames: ["alloweduser"],
+      yolo: false
     },
     botApi: fakeBotApi,
     stateStore,
@@ -110,6 +111,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
   await session.enqueueMessage("first");
   assert.equal(runnerFactory.runs.length, 1);
   assert.equal(runnerFactory.runs[0].params.threadId, null);
+  assert.equal(runnerFactory.runs[0].params.yolo, false);
 
   await session.enqueueMessage("second");
   assert.equal(session.queue.length, 1);
@@ -141,6 +143,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
 
   assert.equal(runnerFactory.runs.length, 2);
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
+  assert.equal(runnerFactory.runs[1].params.yolo, false);
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
   assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
     contextLength: 21300,
@@ -154,6 +157,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
     cachedInputTokens: 0,
     outputTokens: 300
   });
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
 });
 
 test("abort clears queue but keeps existing thread id", async () => {
@@ -197,7 +201,8 @@ test("new session clears persisted thread id and usage", async () => {
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
     lastUsage: null,
-    cumulativeUsage: null
+    cumulativeUsage: null,
+    yolo: null
   });
   assert.equal(
     fakeBotApi.messages.at(-1).text,
@@ -238,6 +243,7 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
     cachedInputTokens: 18000,
     outputTokens: 420
   });
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
 });
 
 test("status shows context length and per-turn usage totals", async () => {
@@ -255,12 +261,39 @@ test("status shows context length and per-turn usage totals", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
+      "yolo: off",
       "recent_context_length: 18.3k",
       "recent_usage: 18.3k",
       "queue:",
       "empty"
     ].join("\n")
   );
+});
+
+test("yolo toggles future runs and persists the override", async () => {
+  const { session, runnerFactory, stateStore, fakeBotApi } = await createSession();
+
+  await session.handleYolo("");
+
+  assert.equal(session.yolo, true);
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, true);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
+
+  await session.enqueueMessage("hello");
+
+  assert.equal(runnerFactory.runs[0].params.yolo, true);
+});
+
+test("yolo accepts explicit on and off values", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleYolo("on");
+  assert.equal(session.yolo, true);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
+
+  await session.handleYolo("off");
+  assert.equal(session.yolo, false);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
 });
 
 test("legacy usage snapshots are treated as cumulative totals during state migration", async () => {
@@ -297,7 +330,8 @@ test("legacy usage snapshots are treated as cumulative totals during state migra
       inputTokens: 21000,
       cachedInputTokens: 15000,
       outputTokens: 300
-    }
+    },
+    yolo: null
   });
 });
 
@@ -326,7 +360,8 @@ test("unauthorized users are told which Telegram username to allow", async () =>
       name: "primary",
       token: "token",
       workdir: "/tmp/project",
-      allowedUsernames: ["alloweduser"]
+      allowedUsernames: ["alloweduser"],
+      yolo: false
     },
     botApi: fakeBotApi,
     stateStore
@@ -342,4 +377,32 @@ test("unauthorized users are told which Telegram username to allow", async () =>
     fakeBotApi.messages.at(-1).text,
     'You are not authorized to use this bot\\. Your Telegram username is @otheruser\\. Add "otheruser" to allowedUsernames in the relay config\\.'
   );
+});
+
+test("runtime routes /yolo to the session", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
+  const stateStore = new StateStore(path.join(tempDir, "state.json"));
+  await stateStore.load();
+
+  const fakeBotApi = new FakeBotApi();
+  const runtime = new BotRuntime({
+    botConfig: {
+      name: "primary",
+      token: "token",
+      workdir: "/tmp/project",
+      allowedUsernames: ["alloweduser"],
+      yolo: false
+    },
+    botApi: fakeBotApi,
+    stateStore
+  });
+
+  await runtime.handleMessage({
+    chat: { id: 1001, type: "private" },
+    from: { id: 42, username: "AllowedUser" },
+    text: "/yolo"
+  });
+
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, true);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
 });

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { normalizeBotYolo } from "./yolo.js";
 import {
   DEFAULT_CONFIG_PATH,
   DEFAULT_STATE_PATH,
@@ -76,7 +77,8 @@ export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
       name,
       token: bot.token.trim(),
       workdir,
-      allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])]
+      allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])],
+      yolo: normalizeBotYolo(bot, prefix)
     };
   });
 

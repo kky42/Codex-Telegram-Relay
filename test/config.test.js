@@ -10,16 +10,18 @@ test("normalizeConfig applies top-level allowed usernames and normalizes usernam
       {
         name: "primary",
         token: "token-1",
-        allowedUsernames: ["@AllowedUser"]
+        allowedUsernames: ["@AllowedUser"],
+        yolo: true
       }
     ]
   });
 
   assert.equal(config.bots[0].name, "primary");
   assert.deepEqual(config.bots[0].allowedUsernames, ["owneruser", "alloweduser"]);
+  assert.equal(config.bots[0].yolo, true);
 });
 
-test("normalizeConfig allows empty allowed usernames by default", () => {
+test("normalizeConfig defaults yolo to false", () => {
   const config = normalizeConfig({
     bots: [
       {
@@ -30,6 +32,7 @@ test("normalizeConfig allows empty allowed usernames by default", () => {
   });
 
   assert.deepEqual(config.bots[0].allowedUsernames, []);
+  assert.equal(config.bots[0].yolo, false);
 });
 
 test("normalizeConfig rejects invalid bot names", () => {
@@ -60,5 +63,21 @@ test("normalizeConfig rejects missing workdir paths", () => {
         ]
       }),
     /workdir must point to an existing path/
+  );
+});
+
+test("normalizeConfig rejects non-boolean yolo values", () => {
+  assert.throws(
+    () =>
+      normalizeConfig({
+        bots: [
+          {
+            name: "primary",
+            token: "token-1",
+            yolo: "interactive"
+          }
+        ]
+    }),
+    /yolo must be a boolean/
   );
 });
