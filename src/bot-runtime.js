@@ -191,8 +191,7 @@ export class ChatSession {
       workdir: this.botConfig.workdir,
       yolo: this.yolo,
       usage: {
-        contextLength: formatTokenCountK(this.lastUsage?.contextLength),
-        totalTokens: formatTokenCountK(this.lastUsage?.totalTokens)
+        contextLength: formatTokenCountK(this.lastUsage?.contextLength)
       },
       queue: this.queue
     });

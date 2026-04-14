@@ -149,8 +149,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
     contextLength: 21300,
     inputTokens: 21000,
     outputTokens: 300,
-    cacheReadTokens: 0,
-    totalTokens: 21300
+    cacheReadTokens: 0
   });
   assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
     inputTokens: 21000,
@@ -184,8 +183,7 @@ test("new session clears persisted thread id and usage", async () => {
       contextLength: 1200,
       inputTokens: 1000,
       outputTokens: 200,
-      cacheReadTokens: 0,
-      totalTokens: 1200
+      cacheReadTokens: 0
     },
     cumulativeUsage: {
       inputTokens: 1000,
@@ -235,8 +233,7 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
     contextLength: 21300,
     inputTokens: null,
     outputTokens: null,
-    cacheReadTokens: null,
-    totalTokens: null
+    cacheReadTokens: null
   });
   assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
     inputTokens: 25000,
@@ -246,14 +243,13 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
   assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
 });
 
-test("status shows context length and per-turn usage totals", async () => {
+test("status shows the latest context length", async () => {
   const { session } = await createSession();
   session.lastUsage = {
     contextLength: 18321,
     inputTokens: 17890,
     outputTokens: 431,
-    cacheReadTokens: 12000,
-    totalTokens: 18321
+    cacheReadTokens: 12000
   };
 
   assert.equal(
@@ -262,8 +258,7 @@ test("status shows context length and per-turn usage totals", async () => {
       "running: no",
       "workdir: /tmp/project",
       "yolo: off",
-      "recent_context_length: 18.3k",
-      "recent_usage: 18.3k",
+      "context_length: 18.3k",
       "queue:",
       "empty"
     ].join("\n")
@@ -296,7 +291,7 @@ test("yolo accepts explicit on and off values", async () => {
   assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
 });
 
-test("legacy usage snapshots are treated as cumulative totals during state migration", async () => {
+test("state store reads only the current usage schema", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-state-"));
   const statePath = path.join(tempDir, "state.json");
   await fs.writeFile(
@@ -308,6 +303,12 @@ test("legacy usage snapshots are treated as cumulative totals during state migra
             "1001": {
               threadId: "thread-legacy",
               lastUsage: {
+                contextLength: 21300,
+                inputTokens: 21000,
+                outputTokens: 300,
+                cacheReadTokens: 15000
+              },
+              cumulativeUsage: {
                 inputTokens: 21000,
                 cachedInputTokens: 15000,
                 outputTokens: 300
@@ -325,7 +326,12 @@ test("legacy usage snapshots are treated as cumulative totals during state migra
 
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: "thread-legacy",
-    lastUsage: null,
+    lastUsage: {
+      contextLength: 21300,
+      inputTokens: 21000,
+      outputTokens: 300,
+      cacheReadTokens: 15000
+    },
     cumulativeUsage: {
       inputTokens: 21000,
       cachedInputTokens: 15000,
