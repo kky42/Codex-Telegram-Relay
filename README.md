@@ -37,7 +37,9 @@ Example config:
       "name": "primary",
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
       "workdir": "/Users/you/project",
-      "yolo": false
+      "yolo": true,
+      "model": "default",
+      "reasoningEffort": "default"
     }
   ]
 }
@@ -49,7 +51,10 @@ Notes:
 - Bot-level `allowedUsernames` is optional and is merged with the top-level list for that bot.
 - `name` must be unique and may contain only letters, numbers, `_`, and `-`.
 - `workdir` is optional. If omitted, the relay uses your home directory. The configured path must already exist.
-- `yolo` is optional and defaults to `false`.
+- `yolo` is optional and defaults to `true`.
+- `model` is optional and defaults to `default`.
+- `reasoningEffort` is optional and defaults to `default`.
+- `default` means the relay does not pass that flag to `codex exec`, so Codex CLI defaults apply.
 - `yolo: false` maps to `codex exec --sandbox read-only`.
 - `yolo: true` maps to `codex exec --dangerously-bypass-approvals-and-sandbox`.
 - `allowedUsernames` entries are matched case-insensitively and may be written with or without a leading `@`.
@@ -62,9 +67,11 @@ Notes:
 - Only private chats are supported.
 - Each `(bot, chat)` pair gets its own Codex thread state and FIFO queue.
 - Fresh prompts use either:
-  - `codex -C <workdir> exec --json --skip-git-repo-check --sandbox read-only <message>`
   - `codex -C <workdir> exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox <message>`
+  - `codex -C <workdir> exec --json --skip-git-repo-check --sandbox read-only <message>`
 - Continued prompts use the same mode with `resume <threadId> <message>`.
+- If `model` is not `default`, the relay appends `--model <value>`.
+- If `reasoningEffort` is not `default`, the relay appends `-c model_reasoning_effort="<value>"`.
 - `thread.started` updates the persisted `threadId`.
 - `turn.completed` updates the persisted cumulative usage totals.
 - The latest context length is read from the matching Codex rollout log, using the final `token_count.last_token_usage` event.
@@ -77,10 +84,14 @@ Notes:
 
 ## Slash Commands
 
-- `/status` shows whether Codex is running, the workdir, the current context length, and the queued messages.
+- `/status` shows whether Codex is running, the workdir, yolo/model/reasoning settings, the current context length, and the queued messages.
 - `/yolo` toggles between read-only and full-access for future runs.
 - `/yolo on` switches future runs to full-access mode.
 - `/yolo off` switches future runs to read-only mode.
+- `/model` shows the current model value.
+- `/model <value>` sets the model for future runs and persists it. Use `/model default` to return to CLI defaults.
+- `/reasoning` shows the current reasoning value.
+- `/reasoning <value>` sets reasoning effort for future runs and persists it. Use `/reasoning default` to return to CLI defaults.
 - `/abort` interrupts Codex and clears the queued messages while keeping the current thread id.
 - `/new` interrupts Codex, clears queued messages, and drops the stored thread id so the next prompt starts fresh.
 

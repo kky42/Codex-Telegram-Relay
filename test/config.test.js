@@ -19,9 +19,11 @@ test("normalizeConfig applies top-level allowed usernames and normalizes usernam
   assert.equal(config.bots[0].name, "primary");
   assert.deepEqual(config.bots[0].allowedUsernames, ["owneruser", "alloweduser"]);
   assert.equal(config.bots[0].yolo, true);
+  assert.equal(config.bots[0].model, "default");
+  assert.equal(config.bots[0].reasoningEffort, "default");
 });
 
-test("normalizeConfig defaults yolo to false", () => {
+test("normalizeConfig defaults yolo/model/reasoningEffort", () => {
   const config = normalizeConfig({
     bots: [
       {
@@ -32,7 +34,9 @@ test("normalizeConfig defaults yolo to false", () => {
   });
 
   assert.deepEqual(config.bots[0].allowedUsernames, []);
-  assert.equal(config.bots[0].yolo, false);
+  assert.equal(config.bots[0].yolo, true);
+  assert.equal(config.bots[0].model, "default");
+  assert.equal(config.bots[0].reasoningEffort, "default");
 });
 
 test("normalizeConfig rejects invalid bot names", () => {
@@ -80,4 +84,20 @@ test("normalizeConfig rejects non-boolean yolo values", () => {
     }),
     /yolo must be a boolean/
   );
+});
+
+test("normalizeConfig accepts arbitrary model/reasoningEffort strings", () => {
+  const config = normalizeConfig({
+    bots: [
+      {
+        name: "primary",
+        token: "token-1",
+        model: "my-model-v0",
+        reasoningEffort: "ultra-custom"
+      }
+    ]
+  });
+
+  assert.equal(config.bots[0].model, "my-model-v0");
+  assert.equal(config.bots[0].reasoningEffort, "ultra-custom");
 });

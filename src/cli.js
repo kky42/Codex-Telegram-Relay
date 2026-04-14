@@ -1,6 +1,7 @@
 import process from "node:process";
 
 import { BotRuntime } from "./bot-runtime.js";
+import { ConfigStore } from "./config-store.js";
 import { loadConfig } from "./config.js";
 import { StateStore } from "./state-store.js";
 import { DEFAULT_CONFIG_PATH, toErrorMessage } from "./utils.js";
@@ -45,13 +46,15 @@ export async function main(argv = process.argv.slice(2)) {
 
   const config = await loadConfig(args.configPath);
   const stateStore = new StateStore(config.statePath);
+  const configStore = new ConfigStore(config.configPath);
   await stateStore.load();
 
   const runtimes = config.bots.map(
     (botConfig) =>
       new BotRuntime({
         botConfig,
-        stateStore
+        stateStore,
+        configStore
       })
   );
 

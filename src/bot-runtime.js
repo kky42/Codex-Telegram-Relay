@@ -2,9 +2,14 @@ import { eventToActions } from "./codex-events.js";
 import { startCodexRun } from "./codex-runner.js";
 import { buildTurnUsage, readContextLengthForThread } from "./codex-usage.js";
 import {
+  DEFAULT_MODEL,
+  DEFAULT_REASONING_EFFORT,
+  normalizeSettingArgument
+} from "./runtime-settings.js";
+import {
   formatYolo,
   parseYoloArgument,
-  YOLO_OFF
+  YOLO_DEFAULT
 } from "./yolo.js";
 import {
   escapeTelegramMarkdown,
@@ -22,9 +27,15 @@ import {
 export const TELEGRAM_COMMANDS = [
   { command: "status", description: "Show current Codex status" },
   { command: "yolo", description: "Toggle full-access Codex mode" },
+  { command: "model", description: "Set model for future runs" },
+  { command: "reasoning", description: "Set reasoning effort for future runs" },
   { command: "abort", description: "Abort current run and clear queued messages" },
   { command: "new", description: "Start a fresh session and clear context" }
 ];
+
+const NOOP_CONFIG_STORE = {
+  async patchBotConfig() {}
+};
 
 function isParseError(error) {
   return (
@@ -78,6 +89,7 @@ export class ChatSession {
     botConfig,
     botApi,
     stateStore,
+    configStore,
     logger,
     chatId,
     createCodexRun = startCodexRun,
@@ -86,6 +98,7 @@ export class ChatSession {
     this.botConfig = botConfig;
     this.botApi = botApi;
     this.stateStore = stateStore;
+    this.configStore = configStore ?? NOOP_CONFIG_STORE;
     this.logger = logger;
     this.chatId = chatId;
 
@@ -93,7 +106,10 @@ export class ChatSession {
     this.threadId = persisted.threadId;
     this.lastUsage = persisted.lastUsage;
     this.cumulativeUsage = persisted.cumulativeUsage;
-    this.yolo = persisted.yolo ?? botConfig.yolo ?? YOLO_OFF;
+    this.yolo = persisted.yolo ?? botConfig.yolo ?? YOLO_DEFAULT;
+    this.model = persisted.model ?? botConfig.model ?? DEFAULT_MODEL;
+    this.reasoningEffort =
+      persisted.reasoningEffort ?? botConfig.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
     this.queue = [];
     this.isRunning = false;
     this.activeRun = null;
@@ -300,11 +316,40 @@ export class ChatSession {
     });
   }
 
-  async updateYolo(yolo) {
-    this.yolo = yolo;
-    await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
-      yolo
-    });
+  async persistRuntimeSettings(patch) {
+    const previousDefaults = {
+      yolo: this.botConfig.yolo,
+      model: this.botConfig.model,
+      reasoningEffort: this.botConfig.reasoningEffort
+    };
+
+    await this.configStore.patchBotConfig(this.botConfig.name, patch);
+
+    try {
+      await this.stateStore.patchChatState(this.botConfig.name, this.chatId, patch);
+    } catch (error) {
+      try {
+        await this.configStore.patchBotConfig(this.botConfig.name, previousDefaults);
+      } catch (rollbackError) {
+        this.logger(`config rollback failed: ${toErrorMessage(rollbackError)}`);
+      }
+      throw error;
+    }
+
+    Object.assign(this.botConfig, patch);
+  }
+
+  async applyRuntimeSettings(patch) {
+    await this.persistRuntimeSettings(patch);
+    if (Object.hasOwn(patch, "yolo")) {
+      this.yolo = patch.yolo;
+    }
+    if (Object.hasOwn(patch, "model")) {
+      this.model = patch.model;
+    }
+    if (Object.hasOwn(patch, "reasoningEffort")) {
+      this.reasoningEffort = patch.reasoningEffort;
+    }
   }
 
   statusText() {
@@ -312,6 +357,8 @@ export class ChatSession {
       isRunning: this.isRunning,
       workdir: this.botConfig.workdir,
       yolo: this.yolo,
+      model: this.model,
+      reasoningEffort: this.reasoningEffort,
       usage: {
         contextLength: formatTokenCountK(this.lastUsage?.contextLength)
       },
@@ -334,7 +381,12 @@ export class ChatSession {
     }
 
     const previousYolo = this.yolo;
-    await this.updateYolo(nextYolo);
+    try {
+      await this.applyRuntimeSettings({ yolo: nextYolo });
+    } catch (error) {
+      await this.sendText(`Failed to persist yolo setting: ${toErrorMessage(error)}`);
+      return;
+    }
 
     if (this.isRunning) {
       await this.sendText(
@@ -344,6 +396,56 @@ export class ChatSession {
     }
 
     await this.sendText(`Yolo set to ${formatYolo(nextYolo)}.`);
+  }
+
+  async handleModel(args) {
+    const nextModel = normalizeSettingArgument(args);
+    if (!nextModel) {
+      await this.sendText(`Current model: ${this.model}.`);
+      return;
+    }
+
+    const previousModel = this.model;
+    try {
+      await this.applyRuntimeSettings({ model: nextModel });
+    } catch (error) {
+      await this.sendText(`Failed to persist model setting: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    if (this.isRunning) {
+      await this.sendText(
+        `Model set to ${nextModel}. The current run stays on ${previousModel}; the next run will use ${nextModel}.`
+      );
+      return;
+    }
+
+    await this.sendText(`Model set to ${nextModel}.`);
+  }
+
+  async handleReasoningEffort(args) {
+    const nextReasoningEffort = normalizeSettingArgument(args);
+    if (!nextReasoningEffort) {
+      await this.sendText(`Current reasoning effort: ${this.reasoningEffort}.`);
+      return;
+    }
+
+    const previousReasoningEffort = this.reasoningEffort;
+    try {
+      await this.applyRuntimeSettings({ reasoningEffort: nextReasoningEffort });
+    } catch (error) {
+      await this.sendText(`Failed to persist reasoning effort setting: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    if (this.isRunning) {
+      await this.sendText(
+        `Reasoning effort set to ${nextReasoningEffort}. The current run stays on ${previousReasoningEffort}; the next run will use ${nextReasoningEffort}.`
+      );
+      return;
+    }
+
+    await this.sendText(`Reasoning effort set to ${nextReasoningEffort}.`);
   }
 
   async abortCurrentRun() {
@@ -421,6 +523,8 @@ export class ChatSession {
       threadId: this.threadId,
       message: nextMessage,
       yolo: this.yolo,
+      model: this.model,
+      reasoningEffort: this.reasoningEffort,
       onEvent: async (event) => {
         const actions = eventToActions(event);
         for (const action of actions) {
@@ -498,12 +602,14 @@ export class BotRuntime {
   constructor({
     botConfig,
     stateStore,
+    configStore = NOOP_CONFIG_STORE,
     fetchImpl = globalThis.fetch,
     botApi = null,
     createCodexRun = startCodexRun
   }) {
     this.botConfig = botConfig;
     this.stateStore = stateStore;
+    this.configStore = configStore;
     this.botApi = botApi ?? new TelegramBotApi(botConfig.token, fetchImpl);
     this.createCodexRun = createCodexRun;
     this.botUsername = null;
@@ -526,6 +632,7 @@ export class BotRuntime {
         botConfig: this.botConfig,
         botApi: this.botApi,
         stateStore: this.stateStore,
+        configStore: this.configStore,
         logger: (message) => this.log(`${chatId}: ${message}`),
         chatId,
         createCodexRun: this.createCodexRun
@@ -585,6 +692,12 @@ export class BotRuntime {
         return;
       case "yolo":
         await session.handleYolo(parsedCommand.args);
+        return;
+      case "model":
+        await session.handleModel(parsedCommand.args);
+        return;
+      case "reasoning":
+        await session.handleReasoningEffort(parsedCommand.args);
         return;
       case "abort":
         await session.handleAbort();

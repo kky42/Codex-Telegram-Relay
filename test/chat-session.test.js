@@ -56,6 +56,20 @@ class FakeBotApi {
   }
 }
 
+class FakeConfigStore {
+  constructor() {
+    this.patches = [];
+    this.failure = null;
+  }
+
+  async patchBotConfig(botName, patch) {
+    if (this.failure) {
+      throw this.failure;
+    }
+    this.patches.push({ botName, patch });
+  }
+}
+
 function createControlledRunnerFactory() {
   const runs = [];
 
@@ -94,6 +108,7 @@ async function createSession(options = {}) {
 
   const fakeBotApi = options.fakeBotApi ?? new FakeBotApi();
   const runnerFactory = options.runnerFactory ?? createControlledRunnerFactory();
+  const configStore = options.configStore ?? new FakeConfigStore();
 
   const session = new ChatSession({
     botConfig: {
@@ -101,10 +116,13 @@ async function createSession(options = {}) {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: false
+      yolo: true,
+      model: "default",
+      reasoningEffort: "default"
     },
     botApi: fakeBotApi,
     stateStore,
+    configStore,
     logger: () => {},
     chatId: 1001,
     createCodexRun: (params) => runnerFactory.createRun(params),
@@ -113,7 +131,7 @@ async function createSession(options = {}) {
   session.startTyping = () => {};
   session.stopTyping = () => {};
 
-  return { session, fakeBotApi, runnerFactory, stateStore, statePath };
+  return { session, fakeBotApi, runnerFactory, stateStore, statePath, configStore };
 }
 
 test("session queues incoming messages and resumes with persisted thread id", async () => {
@@ -122,7 +140,9 @@ test("session queues incoming messages and resumes with persisted thread id", as
   await session.enqueueMessage("first");
   assert.equal(runnerFactory.runs.length, 1);
   assert.equal(runnerFactory.runs[0].params.threadId, null);
-  assert.equal(runnerFactory.runs[0].params.yolo, false);
+  assert.equal(runnerFactory.runs[0].params.yolo, true);
+  assert.equal(runnerFactory.runs[0].params.model, "default");
+  assert.equal(runnerFactory.runs[0].params.reasoningEffort, "default");
 
   await session.enqueueMessage("second");
   assert.equal(session.queue.length, 1);
@@ -154,7 +174,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
 
   assert.equal(runnerFactory.runs.length, 2);
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
-  assert.equal(runnerFactory.runs[1].params.yolo, false);
+  assert.equal(runnerFactory.runs[1].params.yolo, true);
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
   assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
     contextLength: 21300,
@@ -211,7 +231,9 @@ test("new session clears persisted thread id and usage", async () => {
     threadId: null,
     lastUsage: null,
     cumulativeUsage: null,
-    yolo: null
+    yolo: null,
+    model: null,
+    reasoningEffort: null
   });
   assert.equal(
     fakeBotApi.messages.at(-1).text,
@@ -252,6 +274,8 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
     outputTokens: 420
   });
   assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
+  assert.equal(stateStore.getChatState("primary", 1001).model, null);
+  assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, null);
 });
 
 test("status shows the latest context length", async () => {
@@ -268,7 +292,9 @@ test("status shows the latest context length", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
-      "yolo: off",
+      "yolo: on",
+      "model: default",
+      "reasoning_effort: default",
       "context_length: 18.3k",
       "queue:",
       "empty"
@@ -277,17 +303,18 @@ test("status shows the latest context length", async () => {
 });
 
 test("yolo toggles future runs and persists the override", async () => {
-  const { session, runnerFactory, stateStore, fakeBotApi } = await createSession();
+  const { session, runnerFactory, stateStore, fakeBotApi, configStore } = await createSession();
 
   await session.handleYolo("");
 
-  assert.equal(session.yolo, true);
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, true);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
+  assert.equal(session.yolo, false);
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, false);
+  assert.equal(configStore.patches.at(-1).patch.yolo, false);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
 
   await session.enqueueMessage("hello");
 
-  assert.equal(runnerFactory.runs[0].params.yolo, true);
+  assert.equal(runnerFactory.runs[0].params.yolo, false);
 });
 
 test("yolo accepts explicit on and off values", async () => {
@@ -300,6 +327,62 @@ test("yolo accepts explicit on and off values", async () => {
   await session.handleYolo("off");
   assert.equal(session.yolo, false);
   assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
+});
+
+test("/model without args returns the current model", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleModel("");
+
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current model: default\\.");
+});
+
+test("/model with a value persists to state/config and affects next run", async () => {
+  const { session, fakeBotApi, runnerFactory, stateStore, configStore } = await createSession();
+
+  await session.handleModel("gpt-5.4");
+
+  assert.equal(session.model, "gpt-5.4");
+  assert.equal(stateStore.getChatState("primary", 1001).model, "gpt-5.4");
+  assert.equal(configStore.patches.at(-1).patch.model, "gpt-5.4");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Model set to gpt\\-5\\.4\\.");
+
+  await session.enqueueMessage("hello");
+  assert.equal(runnerFactory.runs[0].params.model, "gpt-5.4");
+});
+
+test("/reasoning without args returns the current value", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleReasoningEffort("");
+
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current reasoning effort: default\\.");
+});
+
+test("/reasoning with a value persists to state/config and affects next run", async () => {
+  const { session, fakeBotApi, runnerFactory, stateStore, configStore } = await createSession();
+
+  await session.handleReasoningEffort("high");
+
+  assert.equal(session.reasoningEffort, "high");
+  assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, "high");
+  assert.equal(configStore.patches.at(-1).patch.reasoningEffort, "high");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high\\.");
+
+  await session.enqueueMessage("hello");
+  assert.equal(runnerFactory.runs[0].params.reasoningEffort, "high");
+});
+
+test("runtime settings changes fail entirely when config persistence fails", async () => {
+  const configStore = new FakeConfigStore();
+  configStore.failure = new Error("disk full");
+  const { session, fakeBotApi, stateStore } = await createSession({ configStore });
+
+  await session.handleModel("gpt-5.4");
+
+  assert.equal(session.model, "default");
+  assert.equal(stateStore.getChatState("primary", 1001).model, null);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Failed to persist model setting: disk full");
 });
 
 test("state store reads only the current usage schema", async () => {
@@ -348,7 +431,9 @@ test("state store reads only the current usage schema", async () => {
       cachedInputTokens: 15000,
       outputTokens: 300
     },
-    yolo: null
+    yolo: null,
+    model: null,
+    reasoningEffort: null
   });
 });
 
@@ -651,7 +736,9 @@ test("unauthorized users are told which Telegram username to allow", async () =>
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: false
+      yolo: true,
+      model: "default",
+      reasoningEffort: "default"
     },
     botApi: fakeBotApi,
     stateStore
@@ -681,7 +768,9 @@ test("runtime routes /yolo to the session", async () => {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: false
+      yolo: true,
+      model: "default",
+      reasoningEffort: "default"
     },
     botApi: fakeBotApi,
     stateStore
@@ -693,6 +782,44 @@ test("runtime routes /yolo to the session", async () => {
     text: "/yolo"
   });
 
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, true);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
+  assert.equal(stateStore.getChatState("primary", 1001).yolo, false);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
+});
+
+test("runtime routes /model and /reasoning to the session", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
+  const stateStore = new StateStore(path.join(tempDir, "state.json"));
+  await stateStore.load();
+
+  const fakeBotApi = new FakeBotApi();
+  const runtime = new BotRuntime({
+    botConfig: {
+      name: "primary",
+      token: "token",
+      workdir: "/tmp/project",
+      allowedUsernames: ["alloweduser"],
+      yolo: true,
+      model: "default",
+      reasoningEffort: "default"
+    },
+    botApi: fakeBotApi,
+    stateStore
+  });
+
+  await runtime.handleMessage({
+    chat: { id: 1001, type: "private" },
+    from: { id: 42, username: "AllowedUser" },
+    text: "/model gpt-5.4"
+  });
+
+  await runtime.handleMessage({
+    chat: { id: 1001, type: "private" },
+    from: { id: 42, username: "AllowedUser" },
+    text: "/reasoning high"
+  });
+
+  assert.equal(stateStore.getChatState("primary", 1001).model, "gpt-5.4");
+  assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, "high");
+  assert.equal(fakeBotApi.messages.at(-2).text, "Model set to gpt\\-5\\.4\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high\\.");
 });

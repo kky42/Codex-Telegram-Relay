@@ -21,11 +21,21 @@ export function summarizeQueue(queue) {
     .join("\n");
 }
 
-export function renderStatusMessage({ isRunning, workdir, yolo, usage, queue }) {
+export function renderStatusMessage({
+  isRunning,
+  workdir,
+  yolo,
+  model,
+  reasoningEffort,
+  usage,
+  queue
+}) {
   const lines = [
     `running: ${isRunning ? "yes" : "no"}`,
     `workdir: ${workdir}`,
     `yolo: ${formatYolo(yolo)}`,
+    `model: ${model}`,
+    `reasoning_effort: ${reasoningEffort}`,
     `context_length: ${usage.contextLength}`,
     "queue:",
     summarizeQueue(queue)

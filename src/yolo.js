@@ -1,5 +1,6 @@
 export const YOLO_OFF = false;
 export const YOLO_ON = true;
+export const YOLO_DEFAULT = YOLO_ON;
 
 export function normalizeYolo(value, fieldPath = "yolo") {
   if (typeof value !== "boolean") {
@@ -10,7 +11,7 @@ export function normalizeYolo(value, fieldPath = "yolo") {
 }
 
 export function normalizeBotYolo(bot, fieldPrefix) {
-  return bot.yolo === undefined ? YOLO_OFF : normalizeYolo(bot.yolo, `${fieldPrefix}.yolo`);
+  return bot.yolo === undefined ? YOLO_DEFAULT : normalizeYolo(bot.yolo, `${fieldPrefix}.yolo`);
 }
 
 export function readPersistedYolo(chatState) {

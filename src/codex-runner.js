@@ -1,18 +1,43 @@
 import { spawn } from "node:child_process";
 
 import { parseJsonlLine } from "./codex-events.js";
-import { YOLO_OFF } from "./yolo.js";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_REASONING_EFFORT
+} from "./runtime-settings.js";
+import { YOLO_DEFAULT } from "./yolo.js";
+
+function buildConfigOverrideArg(key, rawValue) {
+  return `${key}=${JSON.stringify(String(rawValue))}`;
+}
 
 export function buildCodexArgs({
   workdir,
   threadId,
   message,
-  yolo = YOLO_OFF
+  yolo = YOLO_DEFAULT,
+  model = DEFAULT_MODEL,
+  reasoningEffort = DEFAULT_REASONING_EFFORT
 }) {
   const modeArgs = yolo
     ? ["--dangerously-bypass-approvals-and-sandbox"]
     : ["--sandbox", "read-only"];
-  const baseArgs = ["-C", workdir, "exec", "--json", "--skip-git-repo-check", ...modeArgs];
+  const modelArgs = model === DEFAULT_MODEL ? [] : ["--model", model];
+  const reasoningArgs =
+    reasoningEffort === DEFAULT_REASONING_EFFORT
+      ? []
+      : ["-c", buildConfigOverrideArg("model_reasoning_effort", reasoningEffort)];
+
+  const baseArgs = [
+    "-C",
+    workdir,
+    "exec",
+    "--json",
+    "--skip-git-repo-check",
+    ...modeArgs,
+    ...modelArgs,
+    ...reasoningArgs
+  ];
 
   if (threadId) {
     return [...baseArgs, "resume", threadId, message];
@@ -25,11 +50,20 @@ export function startCodexRun({
   workdir,
   threadId,
   message,
-  yolo = YOLO_OFF,
+  yolo = YOLO_DEFAULT,
+  model = DEFAULT_MODEL,
+  reasoningEffort = DEFAULT_REASONING_EFFORT,
   onEvent = async () => {},
   onStdErr = () => {}
 }) {
-  const args = buildCodexArgs({ workdir, threadId, message, yolo });
+  const args = buildCodexArgs({
+    workdir,
+    threadId,
+    message,
+    yolo,
+    model,
+    reasoningEffort
+  });
   const child = spawn("codex", args, {
     cwd: workdir,
     env: process.env,
