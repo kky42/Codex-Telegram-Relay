@@ -2,9 +2,9 @@
 
 ## Shell Environment
 
-- In this repo, `node` and `npm` come from `nvm` initialized in `~/.zshrc`.
-- Codex command execution may use a non-interactive shell that does not load `~/.zshrc` automatically.
-- Before running any `node`, `npm`, or `npx` command here, use:
+- In this repo, `node`, `npm`, and `npx` come from the `nvm` toolchain.
+- In the current Codex terminal environment, these commands are available directly without prepending `source ~/.zshrc`.
+- If a future shell session fails to resolve them, use the following fallback:
 
 ```bash
 source ~/.zshrc >/dev/null 2>&1 && <command>
@@ -13,8 +13,9 @@ source ~/.zshrc >/dev/null 2>&1 && <command>
 Examples:
 
 ```bash
-source ~/.zshrc >/dev/null 2>&1 && npm test
-source ~/.zshrc >/dev/null 2>&1 && node --version
+npm test
+node --version
+npx tsc --noEmit
 ```
 
 ## Secrets And Local Config
