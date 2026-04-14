@@ -1,23 +1,28 @@
+import { normalizeCumulativeUsage, normalizeTurnUsage } from "./codex-usage.js";
 import { readJsonFile, writeJsonFileAtomic } from "./utils.js";
 
 function defaultState() {
   return { bots: {} };
 }
 
-function normalizeUsage(usage) {
-  if (!usage || typeof usage !== "object") {
+function normalizeLegacyCumulativeUsage(chatState) {
+  const lastUsage = chatState?.lastUsage;
+  if (!lastUsage || typeof lastUsage !== "object") {
     return null;
   }
 
-  const inputTokens = Number(usage.inputTokens ?? usage.input_tokens ?? 0);
-  const cachedInputTokens = Number(usage.cachedInputTokens ?? usage.cached_input_tokens ?? 0);
-  const outputTokens = Number(usage.outputTokens ?? usage.output_tokens ?? 0);
-
-  if (![inputTokens, cachedInputTokens, outputTokens].every(Number.isFinite)) {
+  if (
+    "contextLength" in lastUsage ||
+    "context_length" in lastUsage ||
+    "cacheReadTokens" in lastUsage ||
+    "cache_read_tokens" in lastUsage ||
+    "totalTokens" in lastUsage ||
+    "total_tokens" in lastUsage
+  ) {
     return null;
   }
 
-  return { inputTokens, cachedInputTokens, outputTokens };
+  return normalizeCumulativeUsage(lastUsage);
 }
 
 export class StateStore {
@@ -41,7 +46,8 @@ export class StateStore {
     const chatState = botState?.chats?.[String(chatId)] ?? {};
     return {
       threadId: typeof chatState.threadId === "string" && chatState.threadId ? chatState.threadId : null,
-      lastUsage: normalizeUsage(chatState.lastUsage)
+      lastUsage: normalizeTurnUsage(chatState.lastUsage),
+      cumulativeUsage: normalizeCumulativeUsage(chatState.cumulativeUsage) ?? normalizeLegacyCumulativeUsage(chatState)
     };
   }
 
@@ -66,6 +72,10 @@ export class StateStore {
         delete next.lastUsage;
       }
 
+      if (!next.cumulativeUsage) {
+        delete next.cumulativeUsage;
+      }
+
       if (Object.keys(next).length === 0) {
         delete this.state.bots[botName].chats[chatKey];
       } else {
@@ -83,6 +93,6 @@ export class StateStore {
   }
 
   async clearChatState(botName, chatId) {
-    await this.patchChatState(botName, chatId, { threadId: null, lastUsage: null });
+    await this.patchChatState(botName, chatId, { threadId: null, lastUsage: null, cumulativeUsage: null });
   }
 }

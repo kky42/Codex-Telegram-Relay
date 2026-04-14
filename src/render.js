@@ -24,7 +24,8 @@ export function renderStatusMessage({ isRunning, workdir, usage, queue }) {
   const lines = [
     `running: ${isRunning ? "yes" : "no"}`,
     `workdir: ${workdir}`,
-    `recent_usage: ${usage}`,
+    `recent_context_length: ${usage.contextLength}`,
+    `recent_usage: ${usage.totalTokens}`,
     "queue:",
     summarizeQueue(queue)
   ];

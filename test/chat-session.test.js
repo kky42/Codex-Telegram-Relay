@@ -12,6 +12,17 @@ function flush() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+async function waitFor(predicate, attempts = 10) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  assert.equal(predicate(), true);
+}
+
 class FakeBotApi {
   constructor({ failMarkdownOnce = false } = {}) {
     this.failMarkdownOnce = failMarkdownOnce;
@@ -87,7 +98,8 @@ async function createSession(options = {}) {
     stateStore,
     logger: () => {},
     chatId: 1001,
-    createCodexRun: (params) => runnerFactory.createRun(params)
+    createCodexRun: (params) => runnerFactory.createRun(params),
+    resolveContextLength: options.resolveContextLength ?? (async () => 21300)
   });
 
   return { session, fakeBotApi, runnerFactory, stateStore, statePath };
@@ -126,13 +138,19 @@ test("session queues incoming messages and resumes with persisted thread id", as
   });
   runnerFactory.runs[0].finish();
 
-  await flush();
-  await flush();
+  await waitFor(() => runnerFactory.runs.length === 2);
 
   assert.equal(runnerFactory.runs.length, 2);
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
   assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
+    contextLength: 21300,
+    inputTokens: 21000,
+    outputTokens: 300,
+    cacheReadTokens: 0,
+    totalTokens: 21300
+  });
+  assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
     inputTokens: 21000,
     cachedInputTokens: 0,
     outputTokens: 300
@@ -159,9 +177,18 @@ test("new session clears persisted thread id and usage", async () => {
   const { session, stateStore, fakeBotApi } = await createSession();
   await session.updateThreadId("thread-old");
   await session.updateUsage({
-    inputTokens: 1000,
-    cachedInputTokens: 0,
-    outputTokens: 200
+    lastUsage: {
+      contextLength: 1200,
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 0,
+      totalTokens: 1200
+    },
+    cumulativeUsage: {
+      inputTokens: 1000,
+      cachedInputTokens: 0,
+      outputTokens: 200
+    }
   });
 
   await session.handleNewSession();
@@ -170,12 +197,109 @@ test("new session clears persisted thread id and usage", async () => {
   assert.equal(session.lastUsage, null);
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
-    lastUsage: null
+    lastUsage: null,
+    cumulativeUsage: null
   });
   assert.equal(
     fakeBotApi.messages.at(-1).text,
     "Started a new session\\. The next message will open a fresh Codex thread\\."
   );
+});
+
+test("resumed sessions without prior cumulative totals keep usage deltas unknown", async () => {
+  const { session, runnerFactory, stateStore } = await createSession();
+  session.threadId = "thread-existing";
+
+  await session.enqueueMessage("resume");
+  assert.equal(runnerFactory.runs.length, 1);
+  assert.equal(runnerFactory.runs[0].params.threadId, "thread-existing");
+
+  await runnerFactory.runs[0].emit({
+    type: "turn.completed",
+    usage: {
+      input_tokens: 25000,
+      cached_input_tokens: 18000,
+      output_tokens: 420
+    }
+  });
+  runnerFactory.runs[0].finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
+    contextLength: 21300,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    totalTokens: null
+  });
+  assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
+    inputTokens: 25000,
+    cachedInputTokens: 18000,
+    outputTokens: 420
+  });
+});
+
+test("status shows context length and per-turn usage totals", async () => {
+  const { session } = await createSession();
+  session.lastUsage = {
+    contextLength: 18321,
+    inputTokens: 17890,
+    outputTokens: 431,
+    cacheReadTokens: 12000,
+    totalTokens: 18321
+  };
+
+  assert.equal(
+    session.statusText(),
+    [
+      "running: no",
+      "workdir: /tmp/project",
+      "recent_context_length: 18.3k",
+      "recent_usage: 18.3k",
+      "queue:",
+      "empty"
+    ].join("\n")
+  );
+});
+
+test("legacy usage snapshots are treated as cumulative totals during state migration", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-state-"));
+  const statePath = path.join(tempDir, "state.json");
+  await fs.writeFile(
+    statePath,
+    JSON.stringify({
+      bots: {
+        primary: {
+          chats: {
+            "1001": {
+              threadId: "thread-legacy",
+              lastUsage: {
+                inputTokens: 21000,
+                cachedInputTokens: 15000,
+                outputTokens: 300
+              }
+            }
+          }
+        }
+      }
+    }),
+    "utf8"
+  );
+
+  const stateStore = new StateStore(statePath);
+  await stateStore.load();
+
+  assert.deepEqual(stateStore.getChatState("primary", 1001), {
+    threadId: "thread-legacy",
+    lastUsage: null,
+    cumulativeUsage: {
+      inputTokens: 21000,
+      cachedInputTokens: 15000,
+      outputTokens: 300
+    }
+  });
 });
 
 test("sendText falls back to plain text when Telegram markdown parsing fails", async () => {

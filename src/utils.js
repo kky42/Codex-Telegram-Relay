@@ -39,12 +39,8 @@ export function normalizeTelegramUsername(username) {
   return String(username || "").trim().replace(/^@+/, "").toLowerCase();
 }
 
-export function formatUsageK(usage) {
-  if (!usage) {
-    return "n/a";
-  }
-
-  const total = Number(usage.inputTokens || 0) + Number(usage.outputTokens || 0);
+export function formatTokenCountK(value) {
+  const total = Number(value);
   if (!Number.isFinite(total)) {
     return "n/a";
   }

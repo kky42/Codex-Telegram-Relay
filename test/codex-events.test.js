@@ -34,7 +34,7 @@ test("fixture events produce only visible actions and usage updates", async () =
     },
     {
       kind: "turn_completed",
-      usage: {
+      cumulativeUsage: {
         inputTokens: 20971,
         cachedInputTokens: 15616,
         outputTokens: 181

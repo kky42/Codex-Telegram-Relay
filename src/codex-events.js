@@ -27,7 +27,7 @@ export function eventToActions(event) {
       return [
         {
           kind: "turn_completed",
-          usage: {
+          cumulativeUsage: {
             inputTokens: Number(event.usage?.input_tokens ?? 0),
             cachedInputTokens: Number(event.usage?.cached_input_tokens ?? 0),
             outputTokens: Number(event.usage?.output_tokens ?? 0)

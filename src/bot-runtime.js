@@ -1,12 +1,13 @@
 import { eventToActions } from "./codex-events.js";
 import { startCodexRun } from "./codex-runner.js";
+import { buildTurnUsage, readContextLengthForThread } from "./codex-usage.js";
 import {
   escapeTelegramMarkdown,
   renderStatusMessage
 } from "./render.js";
 import { TelegramApiError, TelegramBotApi } from "./telegram-api.js";
 import {
-  formatUsageK,
+  formatTokenCountK,
   normalizeTelegramUsername,
   splitPlainText,
   sleep,
@@ -43,7 +44,15 @@ export function parseCommand(text, botUsername) {
 }
 
 export class ChatSession {
-  constructor({ botConfig, botApi, stateStore, logger, chatId, createCodexRun = startCodexRun }) {
+  constructor({
+    botConfig,
+    botApi,
+    stateStore,
+    logger,
+    chatId,
+    createCodexRun = startCodexRun,
+    resolveContextLength = readContextLengthForThread
+  }) {
     this.botConfig = botConfig;
     this.botApi = botApi;
     this.stateStore = stateStore;
@@ -53,11 +62,13 @@ export class ChatSession {
     const persisted = stateStore.getChatState(botConfig.name, chatId);
     this.threadId = persisted.threadId;
     this.lastUsage = persisted.lastUsage;
+    this.cumulativeUsage = persisted.cumulativeUsage;
     this.queue = [];
     this.isRunning = false;
     this.activeRun = null;
     this.typingTimer = null;
     this.createCodexRun = createCodexRun;
+    this.resolveContextLength = resolveContextLength;
   }
 
   async sendText(text) {
@@ -122,21 +133,25 @@ export class ChatSession {
     this.threadId = threadId;
     await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
       threadId,
-      lastUsage: this.lastUsage
+      lastUsage: this.lastUsage,
+      cumulativeUsage: this.cumulativeUsage
     });
   }
 
-  async updateUsage(usage) {
-    this.lastUsage = usage;
+  async updateUsage({ lastUsage, cumulativeUsage }) {
+    this.lastUsage = lastUsage;
+    this.cumulativeUsage = cumulativeUsage;
     await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
       threadId: this.threadId,
-      lastUsage: usage
+      lastUsage,
+      cumulativeUsage
     });
   }
 
   async clearPersistedState() {
     this.threadId = null;
     this.lastUsage = null;
+    this.cumulativeUsage = null;
     await this.stateStore.clearChatState(this.botConfig.name, this.chatId);
   }
 
@@ -144,7 +159,10 @@ export class ChatSession {
     return renderStatusMessage({
       isRunning: this.isRunning,
       workdir: this.botConfig.workdir,
-      usage: formatUsageK(this.lastUsage),
+      usage: {
+        contextLength: formatTokenCountK(this.lastUsage?.contextLength),
+        totalTokens: formatTokenCountK(this.lastUsage?.totalTokens)
+      },
       queue: this.queue
     });
   }
@@ -215,6 +233,10 @@ export class ChatSession {
     this.startTyping();
 
     let emittedError = false;
+    const initialThreadId = this.threadId;
+    const previousCumulativeUsage = this.cumulativeUsage;
+    let currentThreadId = this.threadId;
+    let completedTurnCumulativeUsage = null;
 
     const run = this.createCodexRun({
       workdir: this.botConfig.workdir,
@@ -225,11 +247,12 @@ export class ChatSession {
         const actions = eventToActions(event);
         for (const action of actions) {
           if (action.kind === "thread_started" && action.threadId) {
+            currentThreadId = action.threadId;
             await this.updateThreadId(action.threadId);
             continue;
           }
           if (action.kind === "turn_completed") {
-            await this.updateUsage(action.usage);
+            completedTurnCumulativeUsage = action.cumulativeUsage;
             continue;
           }
           if (action.kind === "error") {
@@ -254,6 +277,21 @@ export class ChatSession {
       const result = await run.done;
       if (result.aborted) {
         return;
+      }
+      if (completedTurnCumulativeUsage) {
+        // Codex emits cumulative usage totals on `turn.completed`. The last model-call
+        // size must be read from the rollout log to match Hi-Boss's context-length semantics.
+        const contextLength = await this.resolveContextLength(currentThreadId);
+        const lastUsage = buildTurnUsage({
+          contextLength,
+          currentCumulativeUsage: completedTurnCumulativeUsage,
+          previousCumulativeUsage,
+          isResume: Boolean(initialThreadId)
+        });
+        await this.updateUsage({
+          lastUsage,
+          cumulativeUsage: completedTurnCumulativeUsage
+        });
       }
       if (!result.sawTerminalEvent && !emittedError) {
         await this.sendText("Codex exited without a terminal JSON event.");

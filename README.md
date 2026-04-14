@@ -60,7 +60,8 @@ Notes:
 - Fresh prompts use `codex -C <workdir> exec --json --skip-git-repo-check <message>`.
 - Continued prompts use `codex -C <workdir> exec --json --skip-git-repo-check resume <threadId> <message>`.
 - `thread.started` updates the persisted `threadId`.
-- `turn.completed` updates the persisted usage snapshot.
+- `turn.completed` updates the persisted cumulative usage totals.
+- The latest context length is read from the matching Codex rollout log, using the final `token_count.last_token_usage` event.
 - User-visible Telegram messages only come from:
   - completed `agent_message` items
   - completed non-message items rendered as their item type, such as `command_execution`
@@ -69,7 +70,7 @@ Notes:
 
 ## Slash Commands
 
-- `/status` shows whether Codex is running, the workdir, the latest usage total as `input + output`, and the queued messages.
+- `/status` shows whether Codex is running, the workdir, the latest context length, the latest per-turn usage total, and the queued messages.
 - `/abort` interrupts Codex and clears the queued messages while keeping the current thread id.
 - `/new` interrupts Codex, clears queued messages, and drops the stored thread id so the next prompt starts fresh.
 
