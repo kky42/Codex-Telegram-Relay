@@ -1,7 +1,11 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCodexArgs } from "../src/codex-runner.js";
+import { buildCodexArgs, startCodexRun } from "../src/codex-runner.js";
 
 test("buildCodexArgs uses exec for a fresh thread", () => {
   assert.deepEqual(buildCodexArgs({
@@ -105,4 +109,42 @@ test("buildCodexArgs appends model and reasoning-effort when provided", () => {
     "model_reasoning_effort=\"high\"",
     "hello"
   ]);
+});
+
+test("startCodexRun forces SIGKILL when the child ignores SIGTERM", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-runner-"));
+  const fakeCodexPath = path.join(tempDir, "codex");
+  await fs.writeFile(
+    fakeCodexPath,
+    `#!/usr/bin/env node
+process.on("SIGTERM", () => {});
+process.stdout.write("ready\\n");
+setInterval(() => {}, 1000);
+`,
+    "utf8"
+  );
+  await fs.chmod(fakeCodexPath, 0o755);
+
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ""}`;
+
+  try {
+    const run = startCodexRun({
+      workdir: tempDir,
+      message: "hello",
+      forceKillDelayMs: 50
+    });
+
+    await new Promise((resolve) => {
+      run.child.stdout.once("data", resolve);
+    });
+    run.abort();
+    const result = await run.done;
+
+    assert.equal(result.aborted, true);
+    assert.equal(result.signal, "SIGKILL");
+  } finally {
+    process.env.PATH = originalPath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });

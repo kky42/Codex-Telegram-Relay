@@ -11,6 +11,10 @@ function buildConfigOverrideArg(key, rawValue) {
   return `${key}=${JSON.stringify(String(rawValue))}`;
 }
 
+function hasChildExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
 export function buildCodexArgs({
   workdir,
   threadId,
@@ -53,6 +57,7 @@ export function startCodexRun({
   yolo = YOLO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT,
+  forceKillDelayMs = 3000,
   onEvent = async () => {},
   onStdErr = () => {}
 }) {
@@ -141,16 +146,16 @@ export function startCodexRun({
     child,
     done,
     abort() {
-      if (aborted || child.killed) {
+      if (aborted || hasChildExited(child)) {
         return;
       }
       aborted = true;
       child.kill("SIGTERM");
       setTimeout(() => {
-        if (!child.killed) {
+        if (!hasChildExited(child)) {
           child.kill("SIGKILL");
         }
-      }, 3000).unref();
+      }, forceKillDelayMs).unref();
     }
   };
 }
