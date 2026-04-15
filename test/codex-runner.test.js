@@ -12,9 +12,9 @@ test("buildCodexArgs uses exec for a fresh thread", () => {
     workdir: "/tmp/project",
     message: "hello"
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -28,9 +28,9 @@ test("buildCodexArgs uses exec resume when thread id exists", () => {
     threadId: "thread-123",
     message: "continue"
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -46,9 +46,9 @@ test("buildCodexArgs uses dangerous bypass for full-access mode", () => {
     message: "hello",
     yolo: true
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -62,9 +62,9 @@ test("buildCodexArgs uses read-only sandbox when yolo is false", () => {
     message: "hello",
     yolo: false
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--sandbox",
@@ -80,9 +80,9 @@ test("buildCodexArgs omits model and reasoning-effort when set to default", () =
     model: "default",
     reasoningEffort: "default"
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -97,9 +97,9 @@ test("buildCodexArgs appends model and reasoning-effort when provided", () => {
     model: "gpt-5.4",
     reasoningEffort: "high"
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -117,9 +117,9 @@ test("buildCodexArgs appends image flags for a fresh thread", () => {
     message: "",
     imagePaths: ["/tmp/one.png", "/tmp/two.png"]
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -136,9 +136,9 @@ test("buildCodexArgs appends image flags before exec resume", () => {
     message: "",
     imagePaths: ["/tmp/one.png"]
   }), [
+    "exec",
     "-C",
     "/tmp/project",
-    "exec",
     "--json",
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -147,6 +147,50 @@ test("buildCodexArgs appends image flags before exec resume", () => {
     "thread-123",
     ""
   ]);
+});
+
+test("startCodexRun invokes codex with exec-scoped workdir arguments", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-args-"));
+  const fakeCodexPath = path.join(tempDir, "codex");
+  await fs.writeFile(
+    fakeCodexPath,
+    `#!/usr/bin/env node
+process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n");
+`,
+    "utf8"
+  );
+  await fs.chmod(fakeCodexPath, 0o755);
+
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ""}`;
+
+  try {
+    const run = startCodexRun({
+      workdir: "/tmp/project",
+      message: "hello"
+    });
+
+    const chunks = [];
+    run.child.stdout.setEncoding("utf8");
+    run.child.stdout.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
+
+    await run.done;
+
+    assert.deepEqual(JSON.parse(chunks.join("").trim()), [
+      "exec",
+      "-C",
+      "/tmp/project",
+      "--json",
+      "--skip-git-repo-check",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "hello"
+    ]);
+  } finally {
+    process.env.PATH = originalPath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("startCodexRun forces SIGKILL when the child ignores SIGTERM", async () => {

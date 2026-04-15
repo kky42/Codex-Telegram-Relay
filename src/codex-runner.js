@@ -34,9 +34,12 @@ export function buildCodexArgs({
       : ["-c", buildConfigOverrideArg("model_reasoning_effort", reasoningEffort)];
 
   const baseArgs = [
+    // `exec -C <dir>` applies the workspace to non-interactive runs. Using the
+    // top-level `codex -C <dir> exec ...` form can leave relay-started sessions
+    // pinned to the relay process cwd instead of the bot's configured workdir.
+    "exec",
     "-C",
     workdir,
-    "exec",
     "--json",
     "--skip-git-repo-check",
     ...modeArgs,
