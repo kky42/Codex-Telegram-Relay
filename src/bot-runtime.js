@@ -1,5 +1,18 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import {
+  ALBUM_QUIET_PERIOD_MS,
+  ATTACHMENT_SIZE_LIMIT_BYTES,
+  attachmentDescriptorFromMessage,
+  attachmentLimitText,
+  buildAttachmentFileName,
+  buildAttachmentPrompt,
+  hasSupportedAttachment,
+  unsupportedAttachmentMessage
+} from "./attachments.js";
 import { eventToActions } from "./codex-events.js";
-import { startCodexRun } from "./codex-runner.js";
+import { buildCodexArgs, startCodexRun } from "./codex-runner.js";
 import { buildTurnUsage, readContextLengthForThread } from "./codex-usage.js";
 import {
   DEFAULT_MODEL,
@@ -17,6 +30,9 @@ import {
 } from "./render.js";
 import { TelegramApiError, TelegramBotApi } from "./telegram-api.js";
 import {
+  DEFAULT_CACHE_PATH,
+  buildChatCacheDirName,
+  ensureDir,
   expandWorkdirPath,
   formatTokenCountK,
   INVALID_WORKDIR_MESSAGE,
@@ -33,6 +49,7 @@ export const TELEGRAM_COMMANDS = [
   { command: "yolo", description: "Toggle full-access Codex mode" },
   { command: "model", description: "Set model for future runs" },
   { command: "reasoning", description: "Set reasoning effort for future runs" },
+  { command: "clear_cache", description: "Clear cached attachments for this bot" },
   { command: "abort", description: "Abort current run and clear queued messages" },
   { command: "new", description: "Start a fresh session and clear context" }
 ];
@@ -59,6 +76,14 @@ function getTelegramMessageId(result) {
 
 function formatProgressText(text) {
   return `🟢 ${text}`;
+}
+
+function normalizeCaption(value) {
+  return String(value ?? "").trim();
+}
+
+function mediaGroupKey(chatId, mediaGroupId) {
+  return `${chatId}:${mediaGroupId}`;
 }
 
 export function parseCommand(text, botUsername) {
@@ -96,6 +121,7 @@ export class ChatSession {
     configStore,
     logger,
     chatId,
+    cacheRootDir = DEFAULT_CACHE_PATH,
     createCodexRun = startCodexRun,
     resolveContextLength = readContextLengthForThread,
     resolveHomeDir
@@ -106,6 +132,7 @@ export class ChatSession {
     this.configStore = configStore ?? NOOP_CONFIG_STORE;
     this.logger = logger;
     this.chatId = chatId;
+    this.cacheRootDir = cacheRootDir;
 
     const persisted = stateStore.getChatState(botConfig.name, chatId);
     this.threadId = persisted.threadId;
@@ -289,6 +316,118 @@ export class ChatSession {
     if (this.typingTimer) {
       clearInterval(this.typingTimer);
       this.typingTimer = null;
+    }
+  }
+
+  cacheDir() {
+    return path.join(this.cacheRootDir, this.botConfig.name);
+  }
+
+  chatCacheDir() {
+    return path.join(this.cacheDir(), buildChatCacheDirName(this.chatId));
+  }
+
+  normalizeTurn(turn) {
+    if (typeof turn === "string") {
+      const promptText = String(turn).trim();
+      return promptText ? { promptText, attachments: [] } : null;
+    }
+
+    const promptText = String(turn?.promptText ?? "").trim();
+    const attachments = Array.isArray(turn?.attachments) ? turn.attachments.filter(Boolean) : [];
+    if (!promptText && attachments.length === 0) {
+      return null;
+    }
+
+    return {
+      promptText,
+      attachments
+    };
+  }
+
+  async clearCache() {
+    await fs.rm(this.cacheDir(), { recursive: true, force: true });
+  }
+
+  async stageAttachment(descriptor) {
+    if (descriptor.fileSize !== null && descriptor.fileSize > ATTACHMENT_SIZE_LIMIT_BYTES) {
+      throw new Error(
+        `${descriptor.fileName ?? descriptor.kind} exceeds the ${attachmentLimitText()} limit.`
+      );
+    }
+
+    const file = await this.botApi.getFile(descriptor.telegramFileId);
+    const resolvedFileSize = Number.isFinite(Number(file?.file_size)) ? Number(file.file_size) : descriptor.fileSize;
+    if (resolvedFileSize !== null && resolvedFileSize > ATTACHMENT_SIZE_LIMIT_BYTES) {
+      throw new Error(
+        `${descriptor.fileName ?? descriptor.kind} exceeds the ${attachmentLimitText()} limit.`
+      );
+    }
+
+    if (typeof file?.file_path !== "string" || !file.file_path) {
+      throw new Error("Telegram did not return a downloadable file path.");
+    }
+
+    const fileName = buildAttachmentFileName({
+      kind: descriptor.kind,
+      fileName: descriptor.fileName,
+      filePath: file.file_path,
+      sourceMessageId: descriptor.sourceMessageId
+    });
+    const localPath = path.join(this.chatCacheDir(), fileName);
+
+    await ensureDir(path.dirname(localPath));
+    const buffer = await this.botApi.downloadFile(file.file_path, {
+      maxBytes: ATTACHMENT_SIZE_LIMIT_BYTES
+    });
+    await fs.writeFile(localPath, buffer);
+
+    return {
+      ...descriptor,
+      localPath,
+      fileName,
+      fileSize: resolvedFileSize ?? buffer.length
+    };
+  }
+
+  async buildAttachmentTurn(messages) {
+    const attachments = [];
+    const downloadedPaths = [];
+    let promptText = "";
+
+    try {
+      for (const message of messages) {
+        const descriptor = attachmentDescriptorFromMessage(message);
+        if (!descriptor) {
+          throw new Error(unsupportedAttachmentMessage());
+        }
+
+        promptText ||= normalizeCaption(message?.caption);
+        const attachment = await this.stageAttachment(descriptor);
+        attachments.push(attachment);
+        downloadedPaths.push(attachment.localPath);
+      }
+    } catch (error) {
+      await Promise.allSettled(downloadedPaths.map((filePath) => fs.rm(filePath, { force: true })));
+      throw error;
+    }
+
+    return {
+      promptText,
+      attachments
+    };
+  }
+
+  async handleAttachmentMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return;
+    }
+
+    try {
+      const turn = await this.buildAttachmentTurn(messages);
+      await this.enqueueTurn(turn);
+    } catch (error) {
+      await this.sendText(toErrorMessage(error));
     }
   }
 
@@ -629,20 +768,27 @@ export class ChatSession {
     await this.sendText("Started a new session. The next message will open a fresh Codex thread.");
   }
 
-  async enqueueMessage(text) {
-    const normalized = String(text || "").trim();
-    if (!normalized) {
+  async enqueueTurn(turn) {
+    const normalizedTurn = this.normalizeTurn(turn);
+    if (!normalizedTurn) {
       return;
     }
 
     if (this.isRunning) {
-      this.queue.push(normalized);
+      this.queue.push(normalizedTurn);
       await this.sendText(`Queued message ${this.queue.length}.`);
       return;
     }
 
-    this.queue.push(normalized);
+    this.queue.push(normalizedTurn);
     void this.drainQueue();
+  }
+
+  async enqueueMessage(text) {
+    await this.enqueueTurn({
+      promptText: text,
+      attachments: []
+    });
   }
 
   async drainQueue() {
@@ -650,8 +796,8 @@ export class ChatSession {
       return;
     }
 
-    const nextMessage = this.queue.shift();
-    if (!nextMessage) {
+    const nextTurn = this.queue.shift();
+    if (!nextTurn) {
       return;
     }
 
@@ -664,11 +810,40 @@ export class ChatSession {
     const previousCumulativeUsage = this.cumulativeUsage;
     let currentThreadId = this.threadId;
     let completedTurnCumulativeUsage = null;
+    const imagePaths = nextTurn.attachments
+      .filter((attachment) => attachment.mode === "native-image")
+      .map((attachment) => attachment.localPath);
+    const message = buildAttachmentPrompt(nextTurn.promptText, nextTurn.attachments);
+    const debugArgs = buildCodexArgs({
+      workdir: this.botConfig.workdir,
+      threadId: this.threadId,
+      message,
+      imagePaths,
+      yolo: this.yolo,
+      model: this.model,
+      reasoningEffort: this.reasoningEffort
+    });
+    const redactedArgs = debugArgs.slice();
+    if (redactedArgs.length > 0) {
+      redactedArgs[redactedArgs.length - 1] = `<prompt:${message.length}>`;
+    }
+    this.logger(
+      `starting codex run ${JSON.stringify({
+        threadId: this.threadId,
+        attachments: nextTurn.attachments.map((attachment) => ({
+          kind: attachment.kind,
+          mode: attachment.mode,
+          localPath: attachment.localPath
+        })),
+        args: redactedArgs
+      })}`
+    );
 
     const run = this.createCodexRun({
       workdir: this.botConfig.workdir,
       threadId: this.threadId,
-      message: nextMessage,
+      message,
+      imagePaths,
       yolo: this.yolo,
       model: this.model,
       reasoningEffort: this.reasoningEffort,
@@ -752,19 +927,24 @@ export class BotRuntime {
     configStore = NOOP_CONFIG_STORE,
     fetchImpl = globalThis.fetch,
     botApi = null,
-    createCodexRun = startCodexRun
+    createCodexRun = startCodexRun,
+    cacheRootDir = DEFAULT_CACHE_PATH,
+    albumQuietPeriodMs = ALBUM_QUIET_PERIOD_MS
   }) {
     this.botConfig = botConfig;
     this.stateStore = stateStore;
     this.configStore = configStore;
     this.botApi = botApi ?? new TelegramBotApi(botConfig.token, fetchImpl);
     this.createCodexRun = createCodexRun;
+    this.cacheRootDir = cacheRootDir;
+    this.albumQuietPeriodMs = albumQuietPeriodMs;
     this.botUsername = null;
     this.offset = undefined;
     this.polling = false;
     this.pollPromise = null;
     this.pollAbortController = null;
     this.sessions = new Map();
+    this.pendingMediaGroups = new Map();
   }
 
   log(message) {
@@ -782,11 +962,26 @@ export class BotRuntime {
         configStore: this.configStore,
         logger: (message) => this.log(`${chatId}: ${message}`),
         chatId,
+        cacheRootDir: this.cacheRootDir,
         createCodexRun: this.createCodexRun
       });
       this.sessions.set(key, session);
     }
     return session;
+  }
+
+  hasPendingBotWork() {
+    if (this.pendingMediaGroups.size > 0) {
+      return true;
+    }
+
+    for (const session of this.sessions.values()) {
+      if (session.isRunning || session.queue.length > 0) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   isAuthorized(user) {
@@ -806,6 +1001,66 @@ export class BotRuntime {
     await session.sendText(text);
   }
 
+  async handleClearCache(chatId) {
+    const session = this.sessionFor(chatId);
+    if (this.hasPendingBotWork()) {
+      await session.sendText("Cannot clear cache while runs, queued turns, or media albums are pending.");
+      return;
+    }
+
+    try {
+      await session.clearCache();
+    } catch (error) {
+      await session.sendText(`Failed to clear cache: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    await session.sendText(`Cleared cache for ${this.botConfig.name}.`);
+  }
+
+  queueMediaGroupMessage(session, message) {
+    const mediaGroupId = message?.media_group_id;
+    if (!mediaGroupId) {
+      return session.handleAttachmentMessages([message]);
+    }
+
+    const key = mediaGroupKey(session.chatId, mediaGroupId);
+    const existing = this.pendingMediaGroups.get(key);
+    if (existing?.timer) {
+      clearTimeout(existing.timer);
+    }
+
+    const entry = existing ?? {
+      session,
+      messages: []
+    };
+    entry.messages.push(message);
+    entry.timer = setTimeout(() => {
+      void this.flushMediaGroup(key);
+    }, this.albumQuietPeriodMs);
+
+    this.pendingMediaGroups.set(key, entry);
+    return undefined;
+  }
+
+  async flushMediaGroup(key) {
+    const entry = this.pendingMediaGroups.get(key);
+    if (!entry) {
+      return;
+    }
+
+    clearTimeout(entry.timer);
+    this.pendingMediaGroups.delete(key);
+    await entry.session.handleAttachmentMessages(entry.messages);
+  }
+
+  clearPendingMediaGroups() {
+    for (const entry of this.pendingMediaGroups.values()) {
+      clearTimeout(entry.timer);
+    }
+    this.pendingMediaGroups.clear();
+  }
+
   async handleMessage(message) {
     const chatId = message.chat?.id;
     if (!chatId) {
@@ -822,42 +1077,51 @@ export class BotRuntime {
       return;
     }
 
-    const text = message.text;
-    if (typeof text !== "string" || !text.trim()) {
-      return;
-    }
-
     const session = this.sessionFor(chatId);
-    const parsedCommand = parseCommand(text, this.botUsername);
-    if (parsedCommand?.ignored) {
+    if (hasSupportedAttachment(message)) {
+      await this.queueMediaGroupMessage(session, message);
       return;
     }
 
-    switch (parsedCommand?.command) {
-      case "status":
-        await session.handleStatus();
+    const text = message.text;
+    if (typeof text === "string" && text.trim()) {
+      const parsedCommand = parseCommand(text, this.botUsername);
+      if (parsedCommand?.ignored) {
         return;
-      case "workdir":
-        await session.handleWorkdir(parsedCommand.args);
-        return;
-      case "yolo":
-        await session.handleYolo(parsedCommand.args);
-        return;
-      case "model":
-        await session.handleModel(parsedCommand.args);
-        return;
-      case "reasoning":
-        await session.handleReasoningEffort(parsedCommand.args);
-        return;
-      case "abort":
-        await session.handleAbort();
-        return;
-      case "new":
-        await session.handleNewSession();
-        return;
-      default:
-        await session.enqueueMessage(text);
+      }
+
+      switch (parsedCommand?.command) {
+        case "status":
+          await session.handleStatus();
+          return;
+        case "workdir":
+          await session.handleWorkdir(parsedCommand.args);
+          return;
+        case "yolo":
+          await session.handleYolo(parsedCommand.args);
+          return;
+        case "model":
+          await session.handleModel(parsedCommand.args);
+          return;
+        case "reasoning":
+          await session.handleReasoningEffort(parsedCommand.args);
+          return;
+        case "clear_cache":
+          await this.handleClearCache(chatId);
+          return;
+        case "abort":
+          await session.handleAbort();
+          return;
+        case "new":
+          await session.handleNewSession();
+          return;
+        default:
+          await session.enqueueMessage(text);
+          return;
+      }
     }
+
+    await session.sendText(unsupportedAttachmentMessage());
   }
 
   async handleUpdate(update) {
@@ -917,6 +1181,7 @@ export class BotRuntime {
 
     this.polling = false;
     this.pollAbortController?.abort();
+    this.clearPendingMediaGroups();
 
     for (const session of this.sessions.values()) {
       session.queue = [];

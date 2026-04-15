@@ -1,4 +1,5 @@
-import { splitPlainText, truncateText } from "./utils.js";
+import { summarizeTurn } from "./attachments.js";
+import { splitPlainText } from "./utils.js";
 import { formatYolo } from "./yolo.js";
 
 const MARKDOWN_V2_SPECIAL_CHARS = /[_*[\]()~`>#+\-=|{}.!\\]/g;
@@ -16,9 +17,7 @@ export function summarizeQueue(queue) {
     return "empty";
   }
 
-  return queue
-    .map((message, index) => `${index + 1}. ${truncateText(message.replace(/\s+/g, " ").trim(), 160)}`)
-    .join("\n");
+  return queue.map((turn, index) => `${index + 1}. ${summarizeTurn(turn)}`).join("\n");
 }
 
 export function renderStatusMessage({

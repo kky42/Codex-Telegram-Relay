@@ -5,6 +5,7 @@ import path from "node:path";
 export const APP_DIR = path.join(os.homedir(), ".codex-telegram-relay");
 export const DEFAULT_CONFIG_PATH = path.join(APP_DIR, "config.json");
 export const DEFAULT_STATE_PATH = path.join(APP_DIR, "state.json");
+export const DEFAULT_CACHE_PATH = path.join(APP_DIR, "cache");
 export const TELEGRAM_MESSAGE_LIMIT = 4000;
 export const INVALID_WORKDIR_MESSAGE =
   "Use an absolute path or ~/..., and make sure it points to an existing directory.";
@@ -39,6 +40,21 @@ export async function writeJsonFileAtomic(filePath, value) {
 
 export function normalizeTelegramUsername(username) {
   return String(username || "").trim().replace(/^@+/, "").toLowerCase();
+}
+
+export function buildChatCacheDirName(chatId) {
+  const normalized = Number(chatId);
+  if (Number.isSafeInteger(normalized) && normalized >= 0) {
+    return `c${normalized.toString(36)}`;
+  }
+
+  const fallback = String(chatId ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return `c${fallback || "unknown"}`;
 }
 
 export function expandWorkdirPath(rawPath, { homeDir = os.homedir() } = {}) {

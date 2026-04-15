@@ -19,6 +19,7 @@ export function buildCodexArgs({
   workdir,
   threadId,
   message,
+  imagePaths = [],
   yolo = YOLO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT
@@ -40,7 +41,8 @@ export function buildCodexArgs({
     "--skip-git-repo-check",
     ...modeArgs,
     ...modelArgs,
-    ...reasoningArgs
+    ...reasoningArgs,
+    ...imagePaths.flatMap((imagePath) => [`--image=${imagePath}`])
   ];
 
   if (threadId) {
@@ -54,6 +56,7 @@ export function startCodexRun({
   workdir,
   threadId,
   message,
+  imagePaths = [],
   yolo = YOLO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT,
@@ -65,12 +68,16 @@ export function startCodexRun({
     workdir,
     threadId,
     message,
+    imagePaths,
     yolo,
     model,
     reasoningEffort
   });
   const child = spawn("codex", args, {
-    cwd: workdir,
+    // `codex -C <dir>` already selects the agent workdir. Spawning the child process
+    // with `cwd` set to protected locations such as iCloud-managed folders can fail
+    // on macOS with EPERM before Codex even starts.
+    cwd: process.cwd(),
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"]
   });

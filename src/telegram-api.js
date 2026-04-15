@@ -16,6 +16,7 @@ export class TelegramBotApi {
     this.token = token;
     this.fetch = fetchImpl;
     this.baseUrl = `https://api.telegram.org/bot${token}`;
+    this.fileBaseUrl = `https://api.telegram.org/file/bot${token}`;
   }
 
   async call(method, payload = {}, options = {}) {
@@ -49,6 +50,10 @@ export class TelegramBotApi {
 
   setMyCommands(commands, options = {}) {
     return this.call("setMyCommands", { commands }, options);
+  }
+
+  getFile(fileId, options = {}) {
+    return this.call("getFile", { file_id: fileId }, options);
   }
 
   getUpdates({ offset, timeout = 50 } = {}, options = {}) {
@@ -101,5 +106,50 @@ export class TelegramBotApi {
       },
       options
     );
+  }
+
+  async downloadFile(filePath, options = {}) {
+    const response = await this.fetch(`${this.fileBaseUrl}/${filePath}`, {
+      method: "GET",
+      signal: options.signal
+    });
+
+    if (!response.ok) {
+      throw new TelegramApiError(`Telegram file download failed with status ${response.status}`, {
+        errorCode: response.status
+      });
+    }
+
+    if (!response.body || typeof response.body.getReader !== "function") {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (Number.isFinite(options.maxBytes) && buffer.length > options.maxBytes) {
+        throw new TelegramApiError(`Telegram file exceeds ${options.maxBytes} bytes`, {
+          errorCode: 413
+        });
+      }
+      return buffer;
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      const chunk = Buffer.from(value);
+      totalBytes += chunk.length;
+      if (Number.isFinite(options.maxBytes) && totalBytes > options.maxBytes) {
+        throw new TelegramApiError(`Telegram file exceeds ${options.maxBytes} bytes`, {
+          errorCode: 413
+        });
+      }
+      chunks.push(chunk);
+    }
+
+    return Buffer.concat(chunks);
   }
 }

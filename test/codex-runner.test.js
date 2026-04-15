@@ -111,6 +111,44 @@ test("buildCodexArgs appends model and reasoning-effort when provided", () => {
   ]);
 });
 
+test("buildCodexArgs appends image flags for a fresh thread", () => {
+  assert.deepEqual(buildCodexArgs({
+    workdir: "/tmp/project",
+    message: "",
+    imagePaths: ["/tmp/one.png", "/tmp/two.png"]
+  }), [
+    "-C",
+    "/tmp/project",
+    "exec",
+    "--json",
+    "--skip-git-repo-check",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "--image=/tmp/one.png",
+    "--image=/tmp/two.png",
+    ""
+  ]);
+});
+
+test("buildCodexArgs appends image flags before exec resume", () => {
+  assert.deepEqual(buildCodexArgs({
+    workdir: "/tmp/project",
+    threadId: "thread-123",
+    message: "",
+    imagePaths: ["/tmp/one.png"]
+  }), [
+    "-C",
+    "/tmp/project",
+    "exec",
+    "--json",
+    "--skip-git-repo-check",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "--image=/tmp/one.png",
+    "resume",
+    "thread-123",
+    ""
+  ]);
+});
+
 test("startCodexRun forces SIGKILL when the child ignores SIGTERM", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-runner-"));
   const fakeCodexPath = path.join(tempDir, "codex");
