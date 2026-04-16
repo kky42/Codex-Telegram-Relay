@@ -17,7 +17,7 @@
   },
   "scripts": {
     "start": "node ./bin/codex-telegram-relay.js",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
     "verify:context-length": "node ./scripts/verify-context-length.js"
   },
   "keywords": [
