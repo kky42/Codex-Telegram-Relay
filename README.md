@@ -26,7 +26,7 @@ Example:
       "name": "primary",
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
       "workdir": "/Users/you/project",
-      "auto": "high",
+      "auto": "medium",
       "schedules": [
         {
           "name": "daily-report",
@@ -51,7 +51,7 @@ Notes:
 - `allowedUsernames` matching is case-insensitive and accepts values with or without `@`.
 - `name` must be unique and may contain only letters, numbers, `_`, and `-`.
 - `workdir` is optional. If omitted, the relay uses your home directory. It must already exist.
-- `auto` defaults to `high`.
+- `auto` defaults to `medium`.
 - `schedules` is optional. Each schedule is tied to one Telegram private chat by `chatId`.
 - Each schedule must define its own `auto` level.
 - Schedule `cron` uses the standard five-field numeric format: `minute hour day-of-month month day-of-week`.

@@ -10,7 +10,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
   await session.enqueueMessage("first");
   assert.equal(runnerFactory.runs.length, 1);
   assert.equal(runnerFactory.runs[0].params.threadId, null);
-  assert.equal(runnerFactory.runs[0].params.autoMode, "high");
+  assert.equal(runnerFactory.runs[0].params.autoMode, "medium");
   assert.equal(runnerFactory.runs[0].params.model, "default");
   assert.equal(runnerFactory.runs[0].params.reasoningEffort, "default");
 
@@ -44,7 +44,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
 
   assert.equal(runnerFactory.runs.length, 2);
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
-  assert.equal(runnerFactory.runs[1].params.autoMode, "high");
+  assert.equal(runnerFactory.runs[1].params.autoMode, "medium");
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
   assert.equal(stateStore.getChatState("primary", 1001).contextLength, 21300);
   assert.equal(stateStore.getChatState("primary", 1001).auto, null);

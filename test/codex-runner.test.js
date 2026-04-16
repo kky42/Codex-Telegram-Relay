@@ -18,7 +18,8 @@ test("buildCodexArgs uses exec for a fresh thread", () => {
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "hello"
   ]);
 });
@@ -34,7 +35,8 @@ test("buildCodexArgs uses exec resume when thread id exists", () => {
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "resume",
     "thread-123",
     "continue"
@@ -103,7 +105,8 @@ test("buildCodexArgs omits model and reasoning-effort when set to default", () =
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "hello"
   ]);
 });
@@ -120,7 +123,8 @@ test("buildCodexArgs appends model and reasoning-effort when provided", () => {
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "--model",
     "gpt-5.4",
     "-c",
@@ -140,7 +144,8 @@ test("buildCodexArgs appends image flags for a fresh thread", () => {
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "--image=/tmp/one.png",
     "--image=/tmp/two.png",
     ""
@@ -159,7 +164,8 @@ test("buildCodexArgs appends image flags before exec resume", () => {
     "/tmp/project",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "--image=/tmp/one.png",
     "resume",
     "thread-123",
@@ -182,7 +188,8 @@ test("buildCodexArgs supports ephemeral last-message capture runs", () => {
     "--ephemeral",
     "--output-last-message",
     "/tmp/last-message.txt",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "workspace-write",
     "hello"
   ]);
 });
@@ -246,7 +253,8 @@ process.stdout.write(JSON.stringify(process.argv.slice(2)) + "\\n");
       "/tmp/project",
       "--json",
       "--skip-git-repo-check",
-      "--dangerously-bypass-approvals-and-sandbox",
+      "--sandbox",
+      "workspace-write",
       "hello"
     ]);
   } finally {

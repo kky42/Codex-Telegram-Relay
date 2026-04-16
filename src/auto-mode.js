@@ -1,7 +1,7 @@
 export const AUTO_LEVEL_LOW = "low";
 export const AUTO_LEVEL_MEDIUM = "medium";
 export const AUTO_LEVEL_HIGH = "high";
-export const AUTO_DEFAULT = AUTO_LEVEL_HIGH;
+export const AUTO_DEFAULT = AUTO_LEVEL_MEDIUM;
 
 export function normalizeAutoMode(value, fieldPath = "auto") {
   if (typeof value !== "string") {
@@ -47,18 +47,10 @@ export function parseAutoArgument(value) {
 
   switch (normalized) {
     case "low":
-    case "read-only":
-    case "readonly":
-    case "safe":
       return AUTO_LEVEL_LOW;
     case "medium":
-    case "full-auto":
-    case "workspace":
-    case "workspace-write":
       return AUTO_LEVEL_MEDIUM;
     case "high":
-    case "danger":
-    case "danger-full-access":
       return AUTO_LEVEL_HIGH;
     default:
       return null;

@@ -88,6 +88,17 @@ test("/schedule run uses an ephemeral codex run and sends only the last agent me
   assert.match(fakeBotApi.messages.at(-1).text, /final scheduled answer/);
 });
 
+test("/schedule add rejects auto aliases and requires low, medium, or high", async () => {
+  const { runtime, fakeBotApi } = await createRuntime();
+
+  await runtime.handleMessage(
+    buildMessage("/schedule add daily-report workspace-write\n0 9 * * 1-5\n\nsummarize repo changes")
+  );
+
+  assert.deepEqual(runtime.botConfig.schedules ?? [], []);
+  assert.equal(fakeBotApi.messages.at(-1).text, "Unknown auto level. Use low, medium, or high.");
+});
+
 test("tickSchedules triggers matching schedules only once per minute", async () => {
   const { runtime, fakeBotApi, runnerFactory } = await createRuntime({
     botConfig: {

@@ -177,7 +177,7 @@ test("status shows the latest context length", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
-      "auto: high",
+      "auto: medium",
       "model: default",
       "reasoning_effort: default",
       "context_length: 18.3k",
@@ -201,7 +201,7 @@ test("status summarizes queued attachment turns", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
-      "auto: high",
+      "auto: medium",
       "model: default",
       "reasoning_effort: default",
       "context_length: n/a",
@@ -237,12 +237,24 @@ test("/auto accepts explicit low, medium, and high values", async () => {
   assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to high.");
 });
 
+test("/auto rejects alias values and requires the canonical names", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleAuto("workspace-write");
+
+  assert.equal(session.auto, "medium");
+  assert.equal(
+    fakeBotApi.messages.at(-1).text,
+    "Unknown auto level. Use /auto, /auto low, /auto medium, or /auto high."
+  );
+});
+
 test("/auto without args returns the current value", async () => {
   const { session, fakeBotApi } = await createSession();
 
   await session.handleAuto("");
 
-  assert.equal(fakeBotApi.messages.at(-1).text, "Current auto level: high.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current auto level: medium.");
 });
 
 test("/model without args returns the current model", async () => {

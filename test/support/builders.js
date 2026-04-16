@@ -21,7 +21,7 @@ export async function createSession(options = {}) {
     token: "token",
     workdir: "/tmp/project",
     allowedUsernames: ["alloweduser"],
-    auto: "high",
+    auto: "medium",
     model: "default",
     reasoningEffort: "default",
     ...options.botConfig
@@ -61,7 +61,7 @@ export async function createRuntime(options = {}) {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      auto: "high",
+      auto: "medium",
       model: "default",
       reasoningEffort: "default",
       ...options.botConfig

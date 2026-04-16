@@ -35,7 +35,7 @@ test("normalizeConfig defaults auto/model/reasoningEffort", () => {
   });
 
   assert.deepEqual(config.bots[0].allowedUsernames, []);
-  assert.equal(config.bots[0].auto, "high");
+  assert.equal(config.bots[0].auto, "medium");
   assert.equal(config.bots[0].model, "default");
   assert.equal(config.bots[0].reasoningEffort, "default");
 });
