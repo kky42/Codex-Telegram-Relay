@@ -59,7 +59,7 @@ export class BotRuntime {
       configStore: this.configStore,
       createCodexRun: this.createCodexRun,
       sessionFor: (chatId) => this.sessionFor(chatId),
-      sendDirectMessage: (chatId, text) => this.sendDirectMessage(chatId, text),
+      sendCodexOutput: (chatId, text) => this.sessionFor(chatId).sendCodexOutput(text),
       log: (message) => this.log(message)
     });
   }

@@ -4,6 +4,8 @@ import { truncateText } from "./utils.js";
 
 export const ATTACHMENT_SIZE_LIMIT_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_SIZE_LIMIT_MB = 20;
+export const OUTBOUND_ATTACHMENT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
+export const OUTBOUND_ATTACHMENT_SIZE_LIMIT_MB = 50;
 export const ALBUM_QUIET_PERIOD_MS = 1500;
 export const SUPPORTED_ATTACHMENT_KINDS = [
   "photo",
@@ -33,6 +35,10 @@ export function unsupportedAttachmentMessage() {
 
 export function attachmentLimitText() {
   return `${ATTACHMENT_SIZE_LIMIT_MB} MB`;
+}
+
+export function outboundAttachmentLimitText() {
+  return `${OUTBOUND_ATTACHMENT_SIZE_LIMIT_MB} MB`;
 }
 
 function parseFiniteNumber(value) {

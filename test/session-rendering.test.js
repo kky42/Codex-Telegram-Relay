@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -348,6 +351,279 @@ test("progress message edits fall back to plain text when Telegram HTML and Mark
       chatId: 1001,
       messageId: 1,
       text: "a_b"
+    }
+  ]);
+});
+
+test("final agent_message can send attachments declared in the stripped output block", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-output-"));
+  const artifactDir = path.join(tempDir, "artifacts");
+  await fs.mkdir(artifactDir, { recursive: true });
+  await fs.writeFile(path.join(artifactDir, "chart.png"), "png", "utf8");
+
+  const { session, fakeBotApi, runnerFactory } = await createSession({
+    botConfig: {
+      workdir: tempDir
+    }
+  });
+
+  await session.enqueueMessage("first");
+  const run = runnerFactory.runs[0];
+
+  await run.emit({
+    type: "item.started",
+    item: {
+      id: "item_1",
+      type: "reasoning",
+      status: "in_progress"
+    }
+  });
+  await run.emit({
+    type: "item.completed",
+    item: {
+      id: "item_2",
+      type: "agent_message",
+      text: [
+        "<telegram-attachments>",
+        '[{"path":"./artifacts/chart.png"}]',
+        "</telegram-attachments>",
+        "",
+        "Here is the chart."
+      ].join("\n")
+    }
+  });
+  run.finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(fakeBotApi.edits, []);
+  assert.deepEqual(fakeBotApi.messages, [
+    {
+      chatId: 1001,
+      text: "🟢 reasoning",
+      parseMode: "HTML"
+    },
+    {
+      chatId: 1001,
+      text: "\n\nHere is the chart.",
+      parseMode: "HTML"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.attachments, [
+    {
+      chatId: 1001,
+      kind: "photo",
+      filePath: path.join(artifactDir, "chart.png"),
+      fileName: "chart.png"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.deletions, [
+    {
+      chatId: 1001,
+      messageId: 1
+    }
+  ]);
+});
+
+test("attachment-only final agent_message deletes the transient progress message", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-output-"));
+  const reportPath = path.join(tempDir, "report.pdf");
+  await fs.writeFile(reportPath, "pdf", "utf8");
+
+  const { session, fakeBotApi, runnerFactory } = await createSession({
+    botConfig: {
+      workdir: tempDir
+    }
+  });
+
+  await session.enqueueMessage("first");
+  const run = runnerFactory.runs[0];
+
+  await run.emit({
+    type: "item.started",
+    item: {
+      id: "item_1",
+      type: "reasoning",
+      status: "in_progress"
+    }
+  });
+  await run.emit({
+    type: "item.completed",
+    item: {
+      id: "item_2",
+      type: "agent_message",
+      text: [
+        "<telegram-attachments>",
+        '[{"path":"./report.pdf","kind":"document"}]',
+        "</telegram-attachments>"
+      ].join("\n")
+    }
+  });
+  run.finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(fakeBotApi.deletions, [
+    {
+      chatId: 1001,
+      messageId: 1
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.attachments, [
+    {
+      chatId: 1001,
+      kind: "document",
+      filePath: reportPath,
+      fileName: "report.pdf"
+    }
+  ]);
+});
+
+test("multiple control blocks preserve text, attachment, and error order", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-output-"));
+  const chartPath = path.join(tempDir, "chart.png");
+  const reportPath = path.join(tempDir, "report.pdf");
+  await fs.writeFile(chartPath, "png", "utf8");
+  await fs.writeFile(reportPath, "pdf", "utf8");
+
+  const attachmentFailures = new Map([[reportPath, "telegram rejected file"]]);
+  const fakeBotApi = new FakeBotApi({ attachmentFailures });
+  const { session, runnerFactory } = await createSession({
+    fakeBotApi,
+    botConfig: {
+      workdir: tempDir
+    }
+  });
+
+  await session.enqueueMessage("first");
+  const run = runnerFactory.runs[0];
+
+  await run.emit({
+    type: "item.started",
+    item: {
+      id: "item_1",
+      type: "reasoning",
+      status: "in_progress"
+    }
+  });
+  await run.emit({
+    type: "item.completed",
+    item: {
+      id: "item_2",
+      type: "agent_message",
+      text: [
+        "Before",
+        "<telegram-attachments>",
+        '[{"path":"./chart.png"}]',
+        "</telegram-attachments>",
+        "Between",
+        "<telegram-attachments>",
+        '[{"path":"./missing.pdf","kind":"document"},{"path":"./report.pdf","kind":"document"}]',
+        "</telegram-attachments>",
+        "After"
+      ].join("\n")
+    }
+  });
+  run.finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(fakeBotApi.messages, [
+    {
+      chatId: 1001,
+      text: "🟢 reasoning",
+      parseMode: "HTML"
+    },
+    {
+      chatId: 1001,
+      text: "\nBetween\n",
+      parseMode: "HTML"
+    },
+    {
+      chatId: 1001,
+      text: "Attachment error: path=./missing.pdf; kind=document; reason=file not found",
+      parseMode: "HTML"
+    },
+    {
+      chatId: 1001,
+      text: "Attachment error: path=./report.pdf; kind=document; reason=telegram rejected file",
+      parseMode: "HTML"
+    },
+    {
+      chatId: 1001,
+      text: "\nAfter",
+      parseMode: "HTML"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.edits, [
+    {
+      chatId: 1001,
+      messageId: 1,
+      text: "Before\n",
+      parseMode: "HTML"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.attachments, [
+    {
+      chatId: 1001,
+      kind: "photo",
+      filePath: chartPath,
+      fileName: "chart.png"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.deletions, []);
+});
+
+test("oversized outbound attachments become inline errors without sending", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-output-"));
+  const largePath = path.join(tempDir, "large.bin");
+  await fs.writeFile(largePath, "", "utf8");
+  await fs.truncate(largePath, 50 * 1024 * 1024 + 1);
+
+  const { session, fakeBotApi, runnerFactory } = await createSession({
+    botConfig: {
+      workdir: tempDir
+    }
+  });
+
+  await session.enqueueMessage("first");
+  const run = runnerFactory.runs[0];
+
+  await run.emit({
+    type: "item.started",
+    item: {
+      id: "item_1",
+      type: "reasoning",
+      status: "in_progress"
+    }
+  });
+  await run.emit({
+    type: "item.completed",
+    item: {
+      id: "item_2",
+      type: "agent_message",
+      text: [
+        "<telegram-attachments>",
+        '[{"path":"./large.bin","kind":"document"}]',
+        "</telegram-attachments>"
+      ].join("\n")
+    }
+  });
+  run.finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(fakeBotApi.attachments, []);
+  assert.deepEqual(fakeBotApi.edits, [
+    {
+      chatId: 1001,
+      messageId: 1,
+      text: "Attachment error: path=./large.bin; kind=document; reason=file exceeds the 50 MB limit",
+      parseMode: "HTML"
     }
   ]);
 });

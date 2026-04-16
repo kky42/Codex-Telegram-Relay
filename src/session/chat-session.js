@@ -139,7 +139,9 @@ export class ChatSession {
   }
 
   renderFinalMessage(text) {
-    return this.messageRenderer.renderFinalMessage(text);
+    return this.messageRenderer.renderFinalMessage(text, {
+      workdir: this.botConfig.workdir
+    });
   }
 
   renderErrorText(text) {
@@ -148,6 +150,12 @@ export class ChatSession {
 
   sendText(text) {
     return this.messageRenderer.sendText(text);
+  }
+
+  sendCodexOutput(text) {
+    return this.messageRenderer.sendCodexOutput(text, {
+      workdir: this.botConfig.workdir
+    });
   }
 
   startTyping() {

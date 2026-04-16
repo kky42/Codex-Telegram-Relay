@@ -5,7 +5,8 @@ export class FakeBotApi {
     failHtmlOnce = false,
     failMarkdownOnce = false,
     failHtmlEditOnce = false,
-    failMarkdownEditOnce = false
+    failMarkdownEditOnce = false,
+    attachmentFailures = null
   } = {}) {
     this.failHtmlOnce = failHtmlOnce;
     this.failMarkdownOnce = failMarkdownOnce;
@@ -13,11 +14,15 @@ export class FakeBotApi {
     this.failMarkdownEditOnce = failMarkdownEditOnce;
     this.messages = [];
     this.edits = [];
+    this.attachments = [];
     this.actions = [];
+    this.deletions = [];
     this.filesById = new Map();
     this.filesByPath = new Map();
     this.getFileCalls = [];
     this.downloadCalls = [];
+    this.nextMessageId = 1;
+    this.attachmentFailures = attachmentFailures ?? new Map();
   }
 
   async sendMessage(payload) {
@@ -34,7 +39,7 @@ export class FakeBotApi {
       throw new TelegramApiError("can't parse entities", { errorCode: 400 });
     }
     this.messages.push(normalizedPayload);
-    return { message_id: this.messages.length };
+    return { message_id: this.nextMessageId++ };
   }
 
   async editMessageText(payload) {
@@ -52,6 +57,28 @@ export class FakeBotApi {
     }
     this.edits.push(normalizedPayload);
     return { message_id: payload.messageId };
+  }
+
+  async deleteMessage(payload) {
+    this.deletions.push(payload);
+    return true;
+  }
+
+  async sendLocalAttachment(payload) {
+    const normalizedPayload = Object.fromEntries(
+      Object.entries(payload).filter(
+        ([, value]) => value !== null && value !== undefined && value !== ""
+      )
+    );
+    const failure =
+      this.attachmentFailures instanceof Map
+        ? this.attachmentFailures.get(normalizedPayload.filePath)
+        : this.attachmentFailures?.[normalizedPayload.filePath];
+    if (failure) {
+      throw new TelegramApiError(String(failure), { errorCode: 400 });
+    }
+    this.attachments.push(normalizedPayload);
+    return { message_id: this.nextMessageId++ };
   }
 
   async sendChatAction(payload) {

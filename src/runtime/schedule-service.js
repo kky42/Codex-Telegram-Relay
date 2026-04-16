@@ -57,14 +57,14 @@ export class ScheduleService {
     configStore,
     createCodexRun,
     sessionFor,
-    sendDirectMessage,
+    sendCodexOutput,
     log
   }) {
     this.botConfig = botConfig;
     this.configStore = configStore;
     this.createCodexRun = createCodexRun;
     this.sessionFor = sessionFor;
-    this.sendDirectMessage = sendDirectMessage;
+    this.sendCodexOutput = sendCodexOutput;
     this.log = log;
     this.scheduleTriggerHistory = new Map();
     this.scheduleTimer = null;
@@ -306,12 +306,12 @@ export class ScheduleService {
       if (!lastMessage) {
         throw new Error("No final agent message returned.");
       }
-      await this.sendDirectMessage(
+      await this.sendCodexOutput(
         schedule.chatId,
         formatScheduleOutput(schedule.name, lastMessage)
       );
     } catch (error) {
-      await this.sendDirectMessage(
+      await this.sendCodexOutput(
         schedule.chatId,
         formatScheduleOutput(schedule.name, `failed: ${toErrorMessage(error)}`)
       );

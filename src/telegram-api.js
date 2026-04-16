@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 export class TelegramApiError extends Error {
   constructor(message, options = {}) {
     super(message);
@@ -27,6 +30,20 @@ export class TelegramBotApi {
       signal: options.signal
     });
 
+    return this.parseResponse(method, response);
+  }
+
+  async callMultipart(method, formData, options = {}) {
+    const response = await this.fetch(`${this.baseUrl}/${method}`, {
+      method: "POST",
+      body: formData,
+      signal: options.signal
+    });
+
+    return this.parseResponse(method, response);
+  }
+
+  async parseResponse(method, response) {
     let body;
     try {
       body = await response.json();
@@ -97,6 +114,46 @@ export class TelegramBotApi {
     return this.call("editMessageText", payload, options);
   }
 
+  deleteMessage({ chatId, messageId }, options = {}) {
+    return this.call(
+      "deleteMessage",
+      {
+        chat_id: chatId,
+        message_id: messageId
+      },
+      options
+    );
+  }
+
+  async sendLocalAttachment(
+    { chatId, kind, filePath, fileName = null, caption = null, parseMode = null },
+    options = {}
+  ) {
+    const target = OUTBOUND_ATTACHMENT_TARGETS[kind];
+    if (!target) {
+      throw new Error(`Unsupported outbound attachment kind: ${kind}`);
+    }
+
+    const body = await fs.readFile(filePath);
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append(
+      target.field,
+      new Blob([body]),
+      fileName || path.basename(String(filePath ?? "")) || "attachment"
+    );
+
+    if (caption) {
+      formData.append("caption", caption);
+    }
+
+    if (parseMode) {
+      formData.append("parse_mode", parseMode);
+    }
+
+    return this.callMultipart(target.method, formData, options);
+  }
+
   sendChatAction({ chatId, action = "typing" }, options = {}) {
     return this.call(
       "sendChatAction",
@@ -153,3 +210,12 @@ export class TelegramBotApi {
     return Buffer.concat(chunks);
   }
 }
+
+const OUTBOUND_ATTACHMENT_TARGETS = {
+  photo: { method: "sendPhoto", field: "photo" },
+  document: { method: "sendDocument", field: "document" },
+  video: { method: "sendVideo", field: "video" },
+  audio: { method: "sendAudio", field: "audio" },
+  voice: { method: "sendVoice", field: "voice" },
+  animation: { method: "sendAnimation", field: "animation" }
+};
