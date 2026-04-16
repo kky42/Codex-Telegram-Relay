@@ -114,12 +114,14 @@ Useful PM2 commands:
 - Telegram media albums are grouped by `media_group_id` and submitted as one logical Codex turn.
 - Attachments larger than 20 MB are rejected.
 - Fresh prompts use `codex exec --json --skip-git-repo-check`; continued prompts use `codex exec resume`.
+- Fresh interactive threads and scheduled ephemeral runs inject relay-specific `developer_instructions` that tell Codex to prefer Telegram HTML-compatible output.
 - Scheduled prompts use a fresh `codex exec --ephemeral --output-last-message ...` run with the schedule's own `auto` level and send only the last `agent_message` back to Telegram, prefixed with `[schedule: <name>]`.
 - Scheduled runs are independent from the chat's interactive session and their messages may interleave with normal replies in the same chat.
 - The relay persists `threadId` from `thread.started` and the latest `context_length` for the chat.
 - `context_length` is derived from the final `token_count.last_token_usage` event in the thread's rollout file under `~/.codex/sessions/...`.
 - Completed `agent_message` items become the visible final reply.
 - Non-message items such as `reasoning`, `web_search`, and `command_execution` reuse one in-flight Telegram message that is edited as progress changes.
+- Telegram sends replies with `HTML` parse mode first, then falls back to `MarkdownV2`, then plain text if parsing still fails.
 - Slash commands that change bot settings persist those defaults to `config.json`. They apply immediately to the invoking chat; other already-loaded chats keep their current in-memory settings until restart.
 - `/clear_cache` is bot-wide. It clears only `~/.codex-telegram-relay/cache/<bot-name>/` and refuses to run while turns or media albums are pending.
 - `/workdir <path>` is bot-wide. It updates the stored bot workdir, aborts the invoking chat's current run, clears that chat's queue, and resets that chat to a fresh Codex session.

@@ -22,6 +22,14 @@ function formatProgressText(text) {
   return `🟢 ${text}`;
 }
 
+function buildRenderAttempts(rawChunk) {
+  return [
+    { text: rawChunk, parseMode: "HTML" },
+    { text: escapeTelegramMarkdown(rawChunk), parseMode: "MarkdownV2" },
+    { text: rawChunk, parseMode: null }
+  ];
+}
+
 export class MessageRenderer {
   constructor({ botApi, chatId }) {
     this.botApi = botApi;
@@ -35,46 +43,46 @@ export class MessageRenderer {
     this.lastRenderedProgressText = null;
   }
 
-  async sendMessageChunk(rawChunk) {
-    const chunk = escapeTelegramMarkdown(rawChunk);
-    try {
-      return await this.botApi.sendMessage({
-        chatId: this.chatId,
-        text: chunk,
-        parseMode: "MarkdownV2"
-      });
-    } catch (error) {
-      if (!isParseError(error)) {
-        throw error;
-      }
+  async renderWithFallback(renderAttempt) {
+    let previousParseError = null;
 
-      return this.botApi.sendMessage({
-        chatId: this.chatId,
-        text: rawChunk
-      });
+    for (const attempt of buildRenderAttempts(renderAttempt.rawChunk)) {
+      try {
+        return await renderAttempt.send(attempt);
+      } catch (error) {
+        if (!isParseError(error) || attempt.parseMode === null) {
+          throw error;
+        }
+        previousParseError = error;
+      }
     }
+
+    throw previousParseError ?? new Error("Telegram render fallback exhausted unexpectedly.");
+  }
+
+  async sendMessageChunk(rawChunk) {
+    return this.renderWithFallback({
+      rawChunk,
+      send: ({ text, parseMode }) =>
+        this.botApi.sendMessage({
+          chatId: this.chatId,
+          text,
+          parseMode
+        })
+    });
   }
 
   async editMessageChunk(messageId, rawChunk) {
-    const chunk = escapeTelegramMarkdown(rawChunk);
-    try {
-      return await this.botApi.editMessageText({
-        chatId: this.chatId,
-        messageId,
-        text: chunk,
-        parseMode: "MarkdownV2"
-      });
-    } catch (error) {
-      if (!isParseError(error)) {
-        throw error;
-      }
-
-      return this.botApi.editMessageText({
-        chatId: this.chatId,
-        messageId,
-        text: rawChunk
-      });
-    }
+    return this.renderWithFallback({
+      rawChunk,
+      send: ({ text, parseMode }) =>
+        this.botApi.editMessageText({
+          chatId: this.chatId,
+          messageId,
+          text,
+          parseMode
+        })
+    });
   }
 
   async sendSplitText(rawText) {

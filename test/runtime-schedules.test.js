@@ -76,6 +76,7 @@ test("/schedule run uses an ephemeral codex run and sends only the last agent me
   assert.equal(runnerFactory.runs[0].params.threadId, null);
   assert.equal(runnerFactory.runs[0].params.ephemeral, true);
   assert.equal(runnerFactory.runs[0].params.autoMode, "low");
+  assert.match(runnerFactory.runs[0].params.developerInstructions, /Telegram Bot API HTML parse mode/);
   assert.match(runnerFactory.runs[0].params.outputLastMessagePath, /last-message\.txt$/);
 
   await fs.writeFile(runnerFactory.runs[0].params.outputLastMessagePath, "final scheduled answer", "utf8");

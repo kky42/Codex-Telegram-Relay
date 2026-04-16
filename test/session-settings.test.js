@@ -13,7 +13,7 @@ test("/workdir without args returns the current workdir", async () => {
 
   await session.handleWorkdir("");
 
-  assert.equal(fakeBotApi.messages.at(-1).text, "Current workdir: /tmp/project\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current workdir: /tmp/project.");
 });
 
 test("/workdir expands ~/ paths and persists the new workdir", async () => {
@@ -72,7 +72,7 @@ test("/workdir is a no-op when the normalized path matches the current workdir",
   assert.equal(session.threadId, "thread-old");
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-old");
   assert.equal(configStore.patches.length, 0);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Workdir is already set to /tmp/project\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Workdir is already set to /tmp/project.");
 });
 
 test("/workdir updates config, clears persisted session state, and affects the next run while idle", async () => {
@@ -219,7 +219,7 @@ test("/auto updates future runs and persists the override", async () => {
   assert.equal(session.auto, "low");
   assert.equal(stateStore.getChatState("primary", 1001).auto, "low");
   assert.equal(configStore.patches.at(-1).patch.auto, "low");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low.");
 
   await session.enqueueMessage("hello");
   assert.equal(runnerFactory.runs[0].params.autoMode, "low");
@@ -230,11 +230,11 @@ test("/auto accepts explicit low, medium, and high values", async () => {
 
   await session.handleAuto("medium");
   assert.equal(session.auto, "medium");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to medium\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to medium.");
 
   await session.handleAuto("high");
   assert.equal(session.auto, "high");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to high\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to high.");
 });
 
 test("/auto without args returns the current value", async () => {
@@ -242,7 +242,7 @@ test("/auto without args returns the current value", async () => {
 
   await session.handleAuto("");
 
-  assert.equal(fakeBotApi.messages.at(-1).text, "Current auto level: high\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current auto level: high.");
 });
 
 test("/model without args returns the current model", async () => {
@@ -250,7 +250,7 @@ test("/model without args returns the current model", async () => {
 
   await session.handleModel("");
 
-  assert.equal(fakeBotApi.messages.at(-1).text, "Current model: default\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current model: default.");
 });
 
 test("/model with a value persists to state/config and affects next run", async () => {
@@ -261,7 +261,7 @@ test("/model with a value persists to state/config and affects next run", async 
   assert.equal(session.model, "gpt-5.4");
   assert.equal(stateStore.getChatState("primary", 1001).model, "gpt-5.4");
   assert.equal(configStore.patches.at(-1).patch.model, "gpt-5.4");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Model set to gpt\\-5\\.4\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Model set to gpt-5.4.");
 
   await session.enqueueMessage("hello");
   assert.equal(runnerFactory.runs[0].params.model, "gpt-5.4");
@@ -272,7 +272,7 @@ test("/reasoning without args returns the current value", async () => {
 
   await session.handleReasoningEffort("");
 
-  assert.equal(fakeBotApi.messages.at(-1).text, "Current reasoning effort: default\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current reasoning effort: default.");
 });
 
 test("/reasoning with a value persists to state/config and affects next run", async () => {
@@ -283,7 +283,7 @@ test("/reasoning with a value persists to state/config and affects next run", as
   assert.equal(session.reasoningEffort, "high");
   assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, "high");
   assert.equal(configStore.patches.at(-1).patch.reasoningEffort, "high");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high.");
 
   await session.enqueueMessage("hello");
   assert.equal(runnerFactory.runs[0].params.reasoningEffort, "high");

@@ -51,6 +51,17 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 npm start
 - Because scheduled runs are independent and may target the same workspace as an interactive run, concurrent edits or other workspace contention are expected and accepted by design.
 - The in-memory once-per-minute schedule suppression is not persisted across relay restarts. If the relay restarts during a matching minute, a schedule may fire again. This is an accepted tradeoff for now.
 
+## Codex Instruction Injection
+
+- For relay-specific response-shaping rules, prefer `developer_instructions`.
+- Experimental result in local `codex exec` runs:
+  - `developer_instructions` is injected as an additional developer message for that turn and affects model behavior immediately.
+  - `instructions` did not show a meaningful effect in the current CLI version and should be treated as reserved for future use.
+  - `model_instructions_file` is heavier-weight: it can override the normal model-instructions / `AGENTS.md` layer. Do not use it for the relay's Telegram formatting policy.
+- For this relay, inject `developer_instructions` only when starting a fresh Codex thread.
+- Do not resend `developer_instructions` on `codex exec resume` for an already-bootstrapped thread.
+- Any run that starts a fresh thread must inject the relay's `developer_instructions` again. This includes ephemeral scheduled runs, because they do not reuse the interactive thread.
+
 ## Release Automation
 
 - npm publishing is handled by GitHub Actions in [`.github/workflows/publish.yml`](.github/workflows/publish.yml).

@@ -26,7 +26,7 @@ test("unauthorized users are told which Telegram username to allow", async () =>
 
   assert.equal(
     fakeBotApi.messages.at(-1).text,
-    'You are not authorized to use this bot\\. Your Telegram username is @otheruser\\. Add "otheruser" to allowedUsernames in the relay config\\.'
+    'You are not authorized to use this bot. Your Telegram username is @otheruser. Add "otheruser" to allowedUsernames in the relay config.'
   );
 });
 
@@ -77,7 +77,7 @@ test("runtime rejects unsupported non-text messages", async () => {
 
   assert.equal(
     fakeBotApi.messages.at(-1).text,
-    "Unsupported message type\\. Supported attachments: photo, document, video, audio, voice, animation\\."
+    "Unsupported message type. Supported attachments: photo, document, video, audio, voice, animation."
   );
 });
 
@@ -94,7 +94,7 @@ test("runtime clears only the current bot cache", async () => {
 
   await assert.rejects(() => fs.stat(primaryCacheDir));
   assert.equal(await fs.readFile(path.join(secondaryCacheDir, "two.txt"), "utf8"), "secondary");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Cleared cache for primary\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Cleared cache for primary.");
 });
 
 test("runtime refuses to clear cache while bot work is pending", async () => {
@@ -106,7 +106,7 @@ test("runtime refuses to clear cache while bot work is pending", async () => {
 
   assert.equal(
     fakeBotApi.messages.at(-1).text,
-    "Cannot clear cache while runs, queued turns, or media albums are pending\\."
+    "Cannot clear cache while runs, queued turns, or media albums are pending."
   );
 });
 
@@ -116,7 +116,7 @@ test("runtime routes /auto to the session", async () => {
   await runtime.handleMessage(buildTextMessage("/auto low"));
 
   assert.equal(stateStore.getChatState("primary", 1001).auto, "low");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low.");
 });
 
 test("runtime routes /model and /reasoning to the session", async () => {
@@ -127,8 +127,8 @@ test("runtime routes /model and /reasoning to the session", async () => {
 
   assert.equal(stateStore.getChatState("primary", 1001).model, "gpt-5.4");
   assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, "high");
-  assert.equal(fakeBotApi.messages.at(-2).text, "Model set to gpt\\-5\\.4\\.");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high\\.");
+  assert.equal(fakeBotApi.messages.at(-2).text, "Model set to gpt-5.4.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high.");
 });
 
 test("runtime routes /workdir to the session", async () => {

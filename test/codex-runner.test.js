@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildCodexArgs, startCodexRun } from "../src/codex-runner.js";
+import { TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/prompt/telegram-output.js";
 
 test("buildCodexArgs uses exec for a fresh thread", () => {
   assert.deepEqual(buildCodexArgs({
@@ -184,6 +185,30 @@ test("buildCodexArgs supports ephemeral last-message capture runs", () => {
     "--dangerously-bypass-approvals-and-sandbox",
     "hello"
   ]);
+});
+
+test("buildCodexArgs injects developer_instructions only for fresh threads", () => {
+  const freshArgs = buildCodexArgs({
+    workdir: "/tmp/project",
+    message: "hello",
+    developerInstructions: TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS
+  });
+  const resumedArgs = buildCodexArgs({
+    workdir: "/tmp/project",
+    threadId: "thread-123",
+    message: "hello",
+    developerInstructions: TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS
+  });
+
+  assert.ok(freshArgs.includes("-c"));
+  assert.ok(
+    freshArgs.includes(
+      `developer_instructions=${JSON.stringify(TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS)}`
+    )
+  );
+  assert.ok(
+    !resumedArgs.some((arg) => arg.startsWith("developer_instructions="))
+  );
 });
 
 test("startCodexRun invokes codex with exec-scoped workdir arguments", async () => {

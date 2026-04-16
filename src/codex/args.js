@@ -20,6 +20,7 @@ import {
  * @property {string} [autoMode]
  * @property {string} [model]
  * @property {string} [reasoningEffort]
+ * @property {string | null | undefined} [developerInstructions]
  */
 
 function buildConfigOverrideArg(key, rawValue) {
@@ -38,7 +39,8 @@ export function buildCodexArgs({
   ephemeral = false,
   autoMode = AUTO_DEFAULT,
   model = DEFAULT_MODEL,
-  reasoningEffort = DEFAULT_REASONING_EFFORT
+  reasoningEffort = DEFAULT_REASONING_EFFORT,
+  developerInstructions = null
 }) {
   const normalizedAutoMode = normalizeAutoMode(autoMode, "autoMode");
   const modeArgs =
@@ -52,6 +54,10 @@ export function buildCodexArgs({
     reasoningEffort === DEFAULT_REASONING_EFFORT
       ? []
       : ["-c", buildConfigOverrideArg("model_reasoning_effort", reasoningEffort)];
+  const developerInstructionArgs =
+    !threadId && developerInstructions
+      ? ["-c", buildConfigOverrideArg("developer_instructions", developerInstructions)]
+      : [];
 
   const baseArgs = [
     "exec",
@@ -59,6 +65,7 @@ export function buildCodexArgs({
     workdir,
     "--json",
     "--skip-git-repo-check",
+    ...developerInstructionArgs,
     ...(ephemeral ? ["--ephemeral"] : []),
     ...(outputLastMessagePath ? ["--output-last-message", outputLastMessagePath] : []),
     ...modeArgs,

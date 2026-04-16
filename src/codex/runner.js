@@ -17,6 +17,7 @@ export function startCodexRun({
   autoMode,
   model,
   reasoningEffort,
+  developerInstructions,
   forceKillDelayMs = 3000,
   onEvent = async () => {},
   onStdErr = () => {}
@@ -30,7 +31,8 @@ export function startCodexRun({
     ephemeral,
     autoMode,
     model,
-    reasoningEffort
+    reasoningEffort,
+    developerInstructions
   });
   const child = spawn("codex", args, {
     cwd: process.cwd(),

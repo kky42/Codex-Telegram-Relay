@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { parseAutoArgument } from "../auto-mode.js";
 import { buildTurnInputMessage } from "../prompt/turn-input.js";
+import { TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../prompt/telegram-output.js";
 import {
   cronMatchesDate,
   formatScheduleMinuteKey,
@@ -289,6 +290,7 @@ export class ScheduleService {
       autoMode: schedule.auto,
       model: session.model,
       reasoningEffort: session.reasoningEffort,
+      developerInstructions: TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS,
       onEvent: async () => {},
       onStdErr: (chunk) => {
         const message = chunk.trim();

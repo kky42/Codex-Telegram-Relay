@@ -16,7 +16,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
 
   await session.enqueueMessage("second");
   assert.equal(session.queue.length, 1);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Queued message 1\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Queued message 1.");
 
   await runnerFactory.runs[0].emit({
     type: "thread.started",
@@ -63,7 +63,7 @@ test("abort clears queue but keeps existing thread id", async () => {
   assert.equal(runnerFactory.runs[0].aborted, true);
   assert.equal(session.queue.length, 0);
   assert.equal(session.threadId, "thread-keep");
-  assert.equal(fakeBotApi.messages.at(-1).text, "Aborted current run and cleared the queue\\.");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Aborted current run and cleared the queue.");
 });
 
 test("new session clears persisted thread id and context length", async () => {
@@ -84,7 +84,7 @@ test("new session clears persisted thread id and context length", async () => {
   });
   assert.equal(
     fakeBotApi.messages.at(-1).text,
-    "Started a new session\\. The next message will open a fresh Codex thread\\."
+    "Started a new session. The next message will open a fresh Codex thread."
   );
 });
 

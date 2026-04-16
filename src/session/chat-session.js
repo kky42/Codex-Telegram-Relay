@@ -13,6 +13,7 @@ import { eventToActions } from "../codex/events.js";
 import { readContextLengthForThread } from "../codex/context-length.js";
 import { startCodexRun } from "../codex/runner.js";
 import { buildTurnInputMessage } from "../prompt/turn-input.js";
+import { TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../prompt/telegram-output.js";
 import { renderStatusMessage } from "../render.js";
 import {
   normalizeSettingArgument
@@ -589,7 +590,8 @@ export class ChatSession {
       imagePaths,
       autoMode: this.auto,
       model: this.model,
-      reasoningEffort: this.reasoningEffort
+      reasoningEffort: this.reasoningEffort,
+      developerInstructions: TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS
     });
     const redactedArgs = debugArgs.slice();
     if (redactedArgs.length > 0) {
@@ -615,6 +617,7 @@ export class ChatSession {
       autoMode: this.auto,
       model: this.model,
       reasoningEffort: this.reasoningEffort,
+      developerInstructions: TELEGRAM_OUTPUT_DEVELOPER_INSTRUCTIONS,
       onEvent: async (event) => {
         const actions = eventToActions(event);
         for (const action of actions) {

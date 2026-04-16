@@ -5,8 +5,23 @@ import { createSession } from "./support/builders.js";
 import { flush } from "./support/async.js";
 import { FakeBotApi } from "./support/fakes.js";
 
-test("sendText falls back to plain text when Telegram markdown parsing fails", async () => {
-  const fakeBotApi = new FakeBotApi({ failMarkdownOnce: true });
+test("sendText falls back to MarkdownV2 when Telegram HTML parsing fails", async () => {
+  const fakeBotApi = new FakeBotApi({ failHtmlOnce: true });
+  const { session } = await createSession({ fakeBotApi });
+
+  await session.sendText("a_b");
+
+  assert.deepEqual(fakeBotApi.messages, [
+    {
+      chatId: 1001,
+      text: "a\\_b",
+      parseMode: "MarkdownV2"
+    }
+  ]);
+});
+
+test("sendText falls back to plain text when Telegram HTML and Markdown parsing fail", async () => {
+  const fakeBotApi = new FakeBotApi({ failHtmlOnce: true, failMarkdownOnce: true });
   const { session } = await createSession({ fakeBotApi });
 
   await session.sendText("a_b");
@@ -66,21 +81,21 @@ test("progress items reuse one Telegram message and final agent_message replaces
     {
       chatId: 1001,
       text: "🟢 reasoning",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
   assert.deepEqual(fakeBotApi.edits, [
     {
       chatId: 1001,
       messageId: 1,
-      text: "🟢 command\\_execution",
-      parseMode: "MarkdownV2"
+      text: "🟢 command_execution",
+      parseMode: "HTML"
     },
     {
       chatId: 1001,
       messageId: 1,
       text: "done",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
 });
@@ -132,12 +147,12 @@ test("subsequent agent messages in the same turn are sent as new Telegram messag
     {
       chatId: 1001,
       text: "🟢 reasoning",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     },
     {
       chatId: 1001,
-      text: "🟢 command\\_execution",
-      parseMode: "MarkdownV2"
+      text: "🟢 command_execution",
+      parseMode: "HTML"
     }
   ]);
   assert.deepEqual(fakeBotApi.edits, [
@@ -145,13 +160,13 @@ test("subsequent agent messages in the same turn are sent as new Telegram messag
       chatId: 1001,
       messageId: 1,
       text: "working",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     },
     {
       chatId: 1001,
       messageId: 2,
       text: "done",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
 });
@@ -188,12 +203,12 @@ test("long final agent_message edits the progress message and sends remaining ch
     {
       chatId: 1001,
       text: "🟢 reasoning",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     },
     {
       chatId: 1001,
       text: "B".repeat(250),
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
   assert.deepEqual(fakeBotApi.edits, [
@@ -201,7 +216,7 @@ test("long final agent_message edits the progress message and sends remaining ch
       chatId: 1001,
       messageId: 1,
       text: "A".repeat(3500),
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
 });
@@ -235,7 +250,7 @@ test("turn errors replace the in-flight progress message", async () => {
     {
       chatId: 1001,
       text: "🟢 reasoning",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
   assert.deepEqual(fakeBotApi.edits, [
@@ -243,13 +258,13 @@ test("turn errors replace the in-flight progress message", async () => {
       chatId: 1001,
       messageId: 1,
       text: "Codex failed: boom",
-      parseMode: "MarkdownV2"
+      parseMode: "HTML"
     }
   ]);
 });
 
-test("progress message edits fall back to plain text when Telegram markdown parsing fails", async () => {
-  const fakeBotApi = new FakeBotApi({ failMarkdownEditOnce: true });
+test("progress message edits fall back to MarkdownV2 when Telegram HTML parsing fails", async () => {
+  const fakeBotApi = new FakeBotApi({ failHtmlEditOnce: true });
   const { session, runnerFactory } = await createSession({ fakeBotApi });
 
   await session.enqueueMessage("first");
@@ -280,7 +295,52 @@ test("progress message edits fall back to plain text when Telegram markdown pars
     {
       chatId: 1001,
       text: "🟢 reasoning",
+      parseMode: "HTML"
+    }
+  ]);
+  assert.deepEqual(fakeBotApi.edits, [
+    {
+      chatId: 1001,
+      messageId: 1,
+      text: "a\\_b",
       parseMode: "MarkdownV2"
+    }
+  ]);
+});
+
+test("progress message edits fall back to plain text when Telegram HTML and Markdown parsing fail", async () => {
+  const fakeBotApi = new FakeBotApi({ failHtmlEditOnce: true, failMarkdownEditOnce: true });
+  const { session, runnerFactory } = await createSession({ fakeBotApi });
+
+  await session.enqueueMessage("first");
+  const run = runnerFactory.runs[0];
+
+  await run.emit({
+    type: "item.started",
+    item: {
+      id: "item_1",
+      type: "reasoning",
+      status: "in_progress"
+    }
+  });
+  await run.emit({
+    type: "item.completed",
+    item: {
+      id: "item_2",
+      type: "agent_message",
+      text: "a_b"
+    }
+  });
+  run.finish();
+
+  await flush();
+  await flush();
+
+  assert.deepEqual(fakeBotApi.messages, [
+    {
+      chatId: 1001,
+      text: "🟢 reasoning",
+      parseMode: "HTML"
     }
   ]);
   assert.deepEqual(fakeBotApi.edits, [

@@ -1,8 +1,15 @@
 import { TelegramApiError } from "../../src/telegram-api.js";
 
 export class FakeBotApi {
-  constructor({ failMarkdownOnce = false, failMarkdownEditOnce = false } = {}) {
+  constructor({
+    failHtmlOnce = false,
+    failMarkdownOnce = false,
+    failHtmlEditOnce = false,
+    failMarkdownEditOnce = false
+  } = {}) {
+    this.failHtmlOnce = failHtmlOnce;
     this.failMarkdownOnce = failMarkdownOnce;
+    this.failHtmlEditOnce = failHtmlEditOnce;
     this.failMarkdownEditOnce = failMarkdownEditOnce;
     this.messages = [];
     this.edits = [];
@@ -14,20 +21,36 @@ export class FakeBotApi {
   }
 
   async sendMessage(payload) {
+    const normalizedPayload =
+      payload.parseMode === null || payload.parseMode === undefined
+        ? Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "parseMode"))
+        : payload;
+    if (this.failHtmlOnce && payload.parseMode === "HTML") {
+      this.failHtmlOnce = false;
+      throw new TelegramApiError("can't parse entities", { errorCode: 400 });
+    }
     if (this.failMarkdownOnce && payload.parseMode === "MarkdownV2") {
       this.failMarkdownOnce = false;
       throw new TelegramApiError("can't parse entities", { errorCode: 400 });
     }
-    this.messages.push(payload);
+    this.messages.push(normalizedPayload);
     return { message_id: this.messages.length };
   }
 
   async editMessageText(payload) {
+    const normalizedPayload =
+      payload.parseMode === null || payload.parseMode === undefined
+        ? Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "parseMode"))
+        : payload;
+    if (this.failHtmlEditOnce && payload.parseMode === "HTML") {
+      this.failHtmlEditOnce = false;
+      throw new TelegramApiError("can't parse entities", { errorCode: 400 });
+    }
     if (this.failMarkdownEditOnce && payload.parseMode === "MarkdownV2") {
       this.failMarkdownEditOnce = false;
       throw new TelegramApiError("can't parse entities", { errorCode: 400 });
     }
-    this.edits.push(payload);
+    this.edits.push(normalizedPayload);
     return { message_id: payload.messageId };
   }
 
