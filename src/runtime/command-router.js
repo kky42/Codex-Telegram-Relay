@@ -55,6 +55,9 @@ export async function routeTextMessage({ text, botUsername, session, runtime }) 
     case "new":
       await session.handleNewSession();
       return;
+    case "reset":
+      await session.handleReset();
+      return;
     default:
       await session.enqueueMessage(text);
   }

@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { loadConfig } from "./config.js";
 import { readJsonFile, writeJsonFileAtomic } from "./utils.js";
 
 function assertConfigShape(rawConfig, configPath) {
@@ -16,6 +17,15 @@ export class ConfigStore {
   constructor(configPath) {
     this.configPath = path.resolve(configPath);
     this.writeChain = Promise.resolve();
+  }
+
+  async loadBotConfig(botName) {
+    const config = await loadConfig(this.configPath);
+    const botConfig = config.bots.find((bot) => bot.name === botName);
+    if (!botConfig) {
+      throw new Error(`Bot "${botName}" not found in config ${this.configPath}`);
+    }
+    return structuredClone(botConfig);
   }
 
   async patchBotConfig(botName, patch) {

@@ -17,7 +17,8 @@ export const TELEGRAM_COMMANDS = [
   { command: "reasoning", description: "Set reasoning effort for future runs" },
   { command: "clear_cache", description: "Clear cached attachments for this bot" },
   { command: "abort", description: "Abort current run and clear queued messages" },
-  { command: "new", description: "Start a fresh session and clear context" }
+  { command: "new", description: "Start a fresh session and clear context" },
+  { command: "reset", description: "Reload config defaults for this chat" }
 ];
 
 function unauthorizedMessage(user) {

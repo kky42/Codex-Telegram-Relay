@@ -131,6 +131,42 @@ test("runtime routes /model and /reasoning to the session", async () => {
   assert.equal(fakeBotApi.messages.at(-1).text, "Reasoning effort set to high.");
 });
 
+test("runtime routes /reset to the session", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-reset-"));
+  const { runtime, fakeBotApi, stateStore, configStore } = await createRuntime({
+    botConfig: {
+      auto: "low",
+      model: "gpt-5.4",
+      reasoningEffort: "low"
+    }
+  });
+
+  await runtime.handleMessage(buildTextMessage("/auto high"));
+  await runtime.handleMessage(buildTextMessage("/reasoning xhigh"));
+  configStore.loadedBotConfig = {
+    name: "primary",
+    token: "token",
+    workdir: nextWorkdir,
+    allowedUsernames: ["alloweduser"],
+    auto: "medium",
+    model: "default",
+    reasoningEffort: "high"
+  };
+  await runtime.handleMessage(buildTextMessage("/reset"));
+
+  assert.deepEqual(stateStore.getChatState("primary", 1001), {
+    threadId: null,
+    contextLength: null,
+    auto: null,
+    model: null,
+    reasoningEffort: null
+  });
+  assert.equal(
+    fakeBotApi.messages.at(-1).text,
+    `Reset current chat to config defaults. Started a new session with workdir ${nextWorkdir}, auto medium, model default, reasoning effort high.`
+  );
+});
+
 test("runtime routes /workdir to the session", async () => {
   const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
   const { runtime, fakeBotApi, configStore } = await createRuntime();

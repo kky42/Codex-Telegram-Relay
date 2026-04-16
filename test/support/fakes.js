@@ -133,16 +133,29 @@ export class FakeBotApi {
 }
 
 export class FakeConfigStore {
-  constructor() {
+  constructor({ loadedBotConfig = null } = {}) {
     this.patches = [];
     this.failure = null;
+    this.loadFailure = null;
+    this.loadedBotConfig = loadedBotConfig;
   }
 
   async patchBotConfig(botName, patch) {
     if (this.failure) {
       throw this.failure;
     }
+    this.loadedBotConfig = {
+      ...(this.loadedBotConfig ?? { name: botName }),
+      ...patch
+    };
     this.patches.push({ botName, patch });
+  }
+
+  async loadBotConfig(botName) {
+    if (this.loadFailure) {
+      throw this.loadFailure;
+    }
+    return structuredClone(this.loadedBotConfig ?? { name: botName });
   }
 }
 

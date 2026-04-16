@@ -100,6 +100,7 @@ Useful PM2 commands:
 - `/model <value>` sets the model for future runs in the current chat and persists the bot default. Use `/model default` to return to CLI defaults.
 - `/reasoning` shows the current reasoning value.
 - `/reasoning <value>` sets reasoning effort for future runs in the current chat and persists the bot default. Use `/reasoning default` to return to CLI defaults.
+- `/reset` reloads the current bot defaults from `config.json`, clears chat-specific auto/model/reasoning overrides, and starts a fresh session for this chat.
 - `/clear_cache` deletes cached Telegram attachments for the current bot instance.
 - `/abort` interrupts Codex and clears the queued messages while keeping the current `threadId`.
 - `/new` interrupts Codex, clears queued messages, and drops the current chat's stored `threadId`.

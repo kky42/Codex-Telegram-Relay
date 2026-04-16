@@ -320,6 +320,10 @@ export class ChatSession {
     return this.persistence.clearPersistedState();
   }
 
+  resetChatToBotDefaults() {
+    return this.persistence.resetChatToBotDefaults();
+  }
+
   persistBotConfig(patch) {
     return this.persistence.persistBotConfig(patch);
   }
@@ -545,6 +549,45 @@ export class ChatSession {
   async handleNewSession() {
     await resetSession(this, { clearPersistedState: true });
     await this.sendText("Started a new session. The next message will open a fresh Codex thread.");
+  }
+
+  async handleReset() {
+    let reloadedBotConfig;
+    try {
+      reloadedBotConfig = await this.configStore.loadBotConfig(this.botConfig.name);
+    } catch (error) {
+      await this.sendText(`Failed to reload bot config: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    const previousDefaults = {
+      workdir: this.botConfig.workdir,
+      auto: this.botConfig.auto,
+      model: this.botConfig.model,
+      reasoningEffort: this.botConfig.reasoningEffort
+    };
+
+    await prepareForSessionReset(this);
+
+    this.botConfig.workdir = reloadedBotConfig.workdir;
+    this.botConfig.auto = reloadedBotConfig.auto;
+    this.botConfig.model = reloadedBotConfig.model;
+    this.botConfig.reasoningEffort = reloadedBotConfig.reasoningEffort;
+
+    try {
+      await this.resetChatToBotDefaults();
+    } catch (error) {
+      this.botConfig.workdir = previousDefaults.workdir;
+      this.botConfig.auto = previousDefaults.auto;
+      this.botConfig.model = previousDefaults.model;
+      this.botConfig.reasoningEffort = previousDefaults.reasoningEffort;
+      await this.sendText(`Failed to reset chat to config defaults: ${toErrorMessage(error)}`);
+      return;
+    }
+
+    await this.sendText(
+      `Reset current chat to config defaults. Started a new session with workdir ${this.botConfig.workdir}, auto ${formatAuto(this.auto)}, model ${this.model}, reasoning effort ${this.reasoningEffort}.`
+    );
   }
 
   async enqueueTurn(turn) {

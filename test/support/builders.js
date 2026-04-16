@@ -15,7 +15,6 @@ export async function createSession(options = {}) {
 
   const fakeBotApi = options.fakeBotApi ?? new FakeBotApi();
   const runnerFactory = options.runnerFactory ?? createControlledRunnerFactory();
-  const configStore = options.configStore ?? new FakeConfigStore();
   const botConfig = {
     name: "primary",
     token: "token",
@@ -26,6 +25,7 @@ export async function createSession(options = {}) {
     reasoningEffort: "default",
     ...options.botConfig
   };
+  const configStore = options.configStore ?? new FakeConfigStore({ loadedBotConfig: botConfig });
 
   const session = new ChatSession({
     botConfig,
@@ -52,20 +52,21 @@ export async function createRuntime(options = {}) {
 
   const fakeBotApi = options.fakeBotApi ?? new FakeBotApi();
   const runnerFactory = options.runnerFactory ?? createControlledRunnerFactory();
-  const configStore = options.configStore ?? new FakeConfigStore();
   const cacheRootDir = path.join(tempDir, "cache");
+  const botConfig = {
+    name: "primary",
+    token: "token",
+    workdir: "/tmp/project",
+    allowedUsernames: ["alloweduser"],
+    auto: "medium",
+    model: "default",
+    reasoningEffort: "default",
+    ...options.botConfig
+  };
+  const configStore = options.configStore ?? new FakeConfigStore({ loadedBotConfig: botConfig });
 
   const runtime = new BotRuntime({
-    botConfig: {
-      name: "primary",
-      token: "token",
-      workdir: "/tmp/project",
-      allowedUsernames: ["alloweduser"],
-      auto: "medium",
-      model: "default",
-      reasoningEffort: "default",
-      ...options.botConfig
-    },
+    botConfig,
     botApi: fakeBotApi,
     stateStore,
     configStore,

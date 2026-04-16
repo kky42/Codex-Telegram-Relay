@@ -301,6 +301,69 @@ test("/reasoning with a value persists to state/config and affects next run", as
   assert.equal(runnerFactory.runs[0].params.reasoningEffort, "high");
 });
 
+test("/reset reloads config defaults, clears chat overrides, and starts a new session", async () => {
+  const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-reset-"));
+  const { session, fakeBotApi, stateStore, configStore } = await createSession({
+    botConfig: {
+      workdir: "/tmp/project-old",
+      auto: "low",
+      model: "gpt-5.4",
+      reasoningEffort: "low"
+    }
+  });
+
+  await session.handleAuto("medium");
+  await session.handleModel("default");
+  await session.handleReasoningEffort("xhigh");
+  await session.updateThreadId("thread-old");
+  await session.updateContextLength(1200);
+
+  configStore.loadedBotConfig = {
+    name: "primary",
+    token: "token",
+    workdir: nextWorkdir,
+    allowedUsernames: ["alloweduser"],
+    auto: "high",
+    model: "gpt-5.4-mini",
+    reasoningEffort: "high"
+  };
+
+  await session.handleReset();
+
+  assert.equal(session.botConfig.workdir, nextWorkdir);
+  assert.equal(session.auto, "high");
+  assert.equal(session.model, "gpt-5.4-mini");
+  assert.equal(session.reasoningEffort, "high");
+  assert.equal(session.threadId, null);
+  assert.equal(session.contextLength, null);
+  assert.deepEqual(stateStore.getChatState("primary", 1001), {
+    threadId: null,
+    contextLength: null,
+    auto: null,
+    model: null,
+    reasoningEffort: null
+  });
+  assert.equal(
+    fakeBotApi.messages.at(-1).text,
+    `Reset current chat to config defaults. Started a new session with workdir ${nextWorkdir}, auto high, model gpt-5.4-mini, reasoning effort high.`
+  );
+});
+
+test("/reset leaves the session untouched when config reload fails", async () => {
+  const configStore = new FakeConfigStore();
+  configStore.loadFailure = new Error("config parse failed");
+  const { session, fakeBotApi, stateStore } = await createSession({ configStore });
+  await session.updateThreadId("thread-old");
+  await session.updateContextLength(1200);
+
+  await session.handleReset();
+
+  assert.equal(session.threadId, "thread-old");
+  assert.equal(session.contextLength, 1200);
+  assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-old");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Failed to reload bot config: config parse failed");
+});
+
 test("runtime settings changes fail entirely when config persistence fails", async () => {
   const configStore = new FakeConfigStore();
   configStore.failure = new Error("disk full");

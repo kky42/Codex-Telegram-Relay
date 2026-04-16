@@ -6,7 +6,10 @@ import { AUTO_DEFAULT } from "../auto-mode.js";
 import { toErrorMessage } from "../utils.js";
 
 export const NOOP_CONFIG_STORE = {
-  async patchBotConfig() {}
+  async patchBotConfig() {},
+  async loadBotConfig() {
+    throw new Error("Config reload is unavailable.");
+  }
 };
 
 /**
@@ -152,6 +155,26 @@ export class SessionPersistence {
 
     this.threadId = null;
     this.contextLength = null;
+  }
+
+  async resetChatToBotDefaults() {
+    try {
+      await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
+        threadId: null,
+        contextLength: null,
+        auto: null,
+        model: null,
+        reasoningEffort: null
+      });
+    } catch (error) {
+      throw error;
+    }
+
+    this.threadId = null;
+    this.contextLength = null;
+    this.auto = this.botConfig.auto ?? AUTO_DEFAULT;
+    this.model = this.botConfig.model ?? DEFAULT_MODEL;
+    this.reasoningEffort = this.botConfig.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
   }
 
   async persistBotConfig(patch) {
