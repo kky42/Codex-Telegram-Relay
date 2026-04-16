@@ -1,6 +1,6 @@
 {
   "name": "codex-telegram-relay",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Lightweight Codex x Telegram bot relay",
   "type": "module",
   "bin": {
