@@ -5,57 +5,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildTurnUsage,
   findCodexRolloutPathForThread,
   readCodexFinalCallTokenUsageFromRollout,
   readContextLengthForThread
-} from "../src/codex-usage.js";
-
-test("buildTurnUsage subtracts prior cumulative totals for resumed runs", () => {
-  assert.deepEqual(
-    buildTurnUsage({
-      contextLength: 12345,
-      currentCumulativeUsage: {
-        inputTokens: 25000,
-        cachedInputTokens: 18000,
-        outputTokens: 420
-      },
-      previousCumulativeUsage: {
-        inputTokens: 21000,
-        cachedInputTokens: 15000,
-        outputTokens: 300
-      },
-      isResume: true
-    }),
-    {
-      contextLength: 12345,
-      inputTokens: 4000,
-      outputTokens: 120,
-      cacheReadTokens: 3000
-    }
-  );
-});
-
-test("buildTurnUsage leaves deltas unknown when resuming without prior totals", () => {
-  assert.deepEqual(
-    buildTurnUsage({
-      contextLength: 12345,
-      currentCumulativeUsage: {
-        inputTokens: 25000,
-        cachedInputTokens: 18000,
-        outputTokens: 420
-      },
-      previousCumulativeUsage: null,
-      isResume: true
-    }),
-    {
-      contextLength: 12345,
-      inputTokens: null,
-      outputTokens: null,
-      cacheReadTokens: null
-    }
-  );
-});
+} from "../src/context-length.js";
 
 test("readCodexFinalCallTokenUsageFromRollout returns the last token_count usage", async () => {
   const fixturePath = path.join(process.cwd(), "test", "fixtures", "codex-rollout.jsonl");

@@ -27,16 +27,7 @@ export function eventToActions(event) {
     case "thread.started":
       return [{ kind: "thread_started", threadId: event.thread_id ?? null }];
     case "turn.completed":
-      return [
-        {
-          kind: "turn_completed",
-          cumulativeUsage: {
-            inputTokens: Number(event.usage?.input_tokens ?? 0),
-            cachedInputTokens: Number(event.usage?.cached_input_tokens ?? 0),
-            outputTokens: Number(event.usage?.output_tokens ?? 0)
-          }
-        }
-      ];
+      return [{ kind: "turn_completed" }];
     case "turn.failed":
       return [
         {

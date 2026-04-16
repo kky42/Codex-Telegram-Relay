@@ -8,121 +8,12 @@ function asFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function hasOwn(value, key) {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function readNullableNumber(value, camelKey, snakeKey) {
-  if (!hasOwn(value, camelKey) && !hasOwn(value, snakeKey)) {
-    return null;
-  }
-
-  const raw = value[camelKey] ?? value[snakeKey];
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-
-  const numeric = Number(raw);
-  return Number.isFinite(numeric) ? numeric : Number.NaN;
-}
-
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getDefaultCodexSessionsDir() {
   return path.join(os.homedir(), ".codex", "sessions");
-}
-
-export function normalizeCumulativeUsage(usage) {
-  if (!isRecord(usage)) {
-    return null;
-  }
-
-  const inputTokens = Number(usage.inputTokens ?? usage.input_tokens);
-  const cachedInputTokens = Number(usage.cachedInputTokens ?? usage.cached_input_tokens);
-  const outputTokens = Number(usage.outputTokens ?? usage.output_tokens);
-
-  if (![inputTokens, cachedInputTokens, outputTokens].every(Number.isFinite)) {
-    return null;
-  }
-
-  return { inputTokens, cachedInputTokens, outputTokens };
-}
-
-export function normalizeTurnUsage(usage) {
-  if (!isRecord(usage)) {
-    return null;
-  }
-
-  const hasTurnFields =
-    hasOwn(usage, "contextLength") ||
-    hasOwn(usage, "context_length") ||
-    hasOwn(usage, "inputTokens") ||
-    hasOwn(usage, "input_tokens") ||
-    hasOwn(usage, "outputTokens") ||
-    hasOwn(usage, "output_tokens") ||
-    hasOwn(usage, "cacheReadTokens") ||
-    hasOwn(usage, "cache_read_tokens");
-
-  if (!hasTurnFields) {
-    return null;
-  }
-
-  const contextLength = readNullableNumber(usage, "contextLength", "context_length");
-  const inputTokens = readNullableNumber(usage, "inputTokens", "input_tokens");
-  const outputTokens = readNullableNumber(usage, "outputTokens", "output_tokens");
-  const cacheReadTokens = readNullableNumber(usage, "cacheReadTokens", "cache_read_tokens");
-
-  if (![contextLength, inputTokens, outputTokens, cacheReadTokens].every((value) => value === null || Number.isFinite(value))) {
-    return null;
-  }
-
-  return { contextLength, inputTokens, outputTokens, cacheReadTokens };
-}
-
-export function buildTurnUsage({ contextLength, currentCumulativeUsage, previousCumulativeUsage, isResume }) {
-  const normalizedCurrent = normalizeCumulativeUsage(currentCumulativeUsage);
-  if (!normalizedCurrent) {
-    return {
-      contextLength: Number.isFinite(contextLength) ? contextLength : null,
-      inputTokens: null,
-      outputTokens: null,
-      cacheReadTokens: null
-    };
-  }
-
-  const normalizedPrevious = normalizeCumulativeUsage(previousCumulativeUsage);
-  const baseline = normalizedPrevious ?? (isResume ? null : { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 });
-
-  if (!baseline) {
-    return {
-      contextLength: Number.isFinite(contextLength) ? contextLength : null,
-      inputTokens: null,
-      outputTokens: null,
-      cacheReadTokens: null
-    };
-  }
-
-  const inputTokens = normalizedCurrent.inputTokens - baseline.inputTokens;
-  const cacheReadTokens = normalizedCurrent.cachedInputTokens - baseline.cachedInputTokens;
-  const outputTokens = normalizedCurrent.outputTokens - baseline.outputTokens;
-
-  if (![inputTokens, cacheReadTokens, outputTokens].every((value) => Number.isFinite(value) && value >= 0)) {
-    return {
-      contextLength: Number.isFinite(contextLength) ? contextLength : null,
-      inputTokens: null,
-      outputTokens: null,
-      cacheReadTokens: null
-    };
-  }
-
-  return {
-    contextLength: Number.isFinite(contextLength) ? contextLength : null,
-    inputTokens,
-    outputTokens,
-    cacheReadTokens
-  };
 }
 
 export async function findCodexRolloutPathForThread(threadId, { sessionsDir = getDefaultCodexSessionsDir() } = {}) {

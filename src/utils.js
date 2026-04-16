@@ -93,6 +93,10 @@ export async function resolveWorkdirPath(rawPath, { homeDir = os.homedir() } = {
 }
 
 export function formatTokenCountK(value) {
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+
   const total = Number(value);
   if (!Number.isFinite(total)) {
     return "n/a";

@@ -1,10 +1,13 @@
-import { normalizeCumulativeUsage, normalizeTurnUsage } from "./codex-usage.js";
 import {
   readPersistedModel,
   readPersistedReasoningEffort
 } from "./runtime-settings.js";
 import { readPersistedYolo } from "./yolo.js";
 import { readJsonFile, writeJsonFileAtomic } from "./utils.js";
+
+function normalizeContextLength(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 function defaultState() {
   return { bots: {} };
@@ -31,8 +34,7 @@ export class StateStore {
     const chatState = botState?.chats?.[String(chatId)] ?? {};
     return {
       threadId: typeof chatState.threadId === "string" && chatState.threadId ? chatState.threadId : null,
-      lastUsage: normalizeTurnUsage(chatState.lastUsage),
-      cumulativeUsage: normalizeCumulativeUsage(chatState.cumulativeUsage),
+      contextLength: normalizeContextLength(chatState.contextLength),
       yolo: readPersistedYolo(chatState),
       model: readPersistedModel(chatState),
       reasoningEffort: readPersistedReasoningEffort(chatState)
@@ -57,12 +59,8 @@ export class StateStore {
         delete next.threadId;
       }
 
-      if (!next.lastUsage) {
-        delete next.lastUsage;
-      }
-
-      if (!next.cumulativeUsage) {
-        delete next.cumulativeUsage;
+      if (!Number.isFinite(next.contextLength)) {
+        delete next.contextLength;
       }
 
       if (typeof next.yolo !== "boolean") {
@@ -96,6 +94,6 @@ export class StateStore {
   }
 
   async clearChatState(botName, chatId) {
-    await this.patchChatState(botName, chatId, { threadId: null, lastUsage: null, cumulativeUsage: null });
+    await this.patchChatState(botName, chatId, { threadId: null, contextLength: null });
   }
 }

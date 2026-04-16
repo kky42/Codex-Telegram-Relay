@@ -14,7 +14,7 @@ import {
 } from "./attachments.js";
 import { eventToActions } from "./codex-events.js";
 import { buildCodexArgs, startCodexRun } from "./codex-runner.js";
-import { buildTurnUsage, readContextLengthForThread } from "./codex-usage.js";
+import { readContextLengthForThread } from "./context-length.js";
 import {
   cronMatchesDate,
   formatScheduleMinuteKey,
@@ -179,8 +179,7 @@ export class ChatSession {
 
     const persisted = stateStore.getChatState(botConfig.name, chatId);
     this.threadId = persisted.threadId;
-    this.lastUsage = persisted.lastUsage;
-    this.cumulativeUsage = persisted.cumulativeUsage;
+    this.contextLength = persisted.contextLength;
     this.yolo = persisted.yolo ?? botConfig.yolo ?? YOLO_DEFAULT;
     this.model = persisted.model ?? botConfig.model ?? DEFAULT_MODEL;
     this.reasoningEffort =
@@ -477,15 +476,13 @@ export class ChatSession {
   snapshotPersistedState() {
     return {
       threadId: this.threadId,
-      lastUsage: this.lastUsage,
-      cumulativeUsage: this.cumulativeUsage
+      contextLength: this.contextLength
     };
   }
 
   restorePersistedState(snapshot) {
     this.threadId = snapshot.threadId;
-    this.lastUsage = snapshot.lastUsage;
-    this.cumulativeUsage = snapshot.cumulativeUsage;
+    this.contextLength = snapshot.contextLength;
   }
 
   async updateThreadId(threadId) {
@@ -494,8 +491,7 @@ export class ChatSession {
     try {
       await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
         threadId,
-        lastUsage: this.lastUsage,
-        cumulativeUsage: this.cumulativeUsage
+        contextLength: this.contextLength
       });
     } catch (error) {
       this.restorePersistedState(previousState);
@@ -505,22 +501,20 @@ export class ChatSession {
     this.threadId = threadId;
   }
 
-  async updateUsage({ lastUsage, cumulativeUsage }) {
+  async updateContextLength(contextLength) {
     const previousState = this.snapshotPersistedState();
 
     try {
       await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
         threadId: this.threadId,
-        lastUsage,
-        cumulativeUsage
+        contextLength
       });
     } catch (error) {
       this.restorePersistedState(previousState);
       throw error;
     }
 
-    this.lastUsage = lastUsage;
-    this.cumulativeUsage = cumulativeUsage;
+    this.contextLength = contextLength;
   }
 
   async clearPersistedState() {
@@ -529,8 +523,7 @@ export class ChatSession {
     try {
       await this.stateStore.patchChatState(this.botConfig.name, this.chatId, {
         threadId: null,
-        lastUsage: null,
-        cumulativeUsage: null
+        contextLength: null
       });
     } catch (error) {
       this.restorePersistedState(previousState);
@@ -538,8 +531,7 @@ export class ChatSession {
     }
 
     this.threadId = null;
-    this.lastUsage = null;
-    this.cumulativeUsage = null;
+    this.contextLength = null;
   }
 
   async persistBotConfig(patch) {
@@ -689,7 +681,7 @@ export class ChatSession {
       model: this.model,
       reasoningEffort: this.reasoningEffort,
       usage: {
-        contextLength: formatTokenCountK(this.lastUsage?.contextLength)
+        contextLength: formatTokenCountK(this.contextLength)
       },
       queue: this.queue
     });
@@ -849,10 +841,8 @@ export class ChatSession {
     this.resetTransientTurnState();
 
     let emittedError = false;
-    const initialThreadId = this.threadId;
-    const previousCumulativeUsage = this.cumulativeUsage;
     let currentThreadId = this.threadId;
-    let completedTurnCumulativeUsage = null;
+    let completedTurn = false;
     const imagePaths = nextTurn.attachments
       .filter((attachment) => attachment.mode === "native-image")
       .map((attachment) => attachment.localPath);
@@ -899,7 +889,7 @@ export class ChatSession {
             continue;
           }
           if (action.kind === "turn_completed") {
-            completedTurnCumulativeUsage = action.cumulativeUsage;
+            completedTurn = true;
             continue;
           }
           if (action.kind === "progress") {
@@ -931,20 +921,9 @@ export class ChatSession {
       if (result.aborted) {
         return;
       }
-      if (completedTurnCumulativeUsage) {
-        // Codex emits cumulative usage totals on `turn.completed`. The last model-call
-        // size must be read from the rollout log to match Hi-Boss's context-length semantics.
+      if (completedTurn && currentThreadId) {
         const contextLength = await this.resolveContextLength(currentThreadId);
-        const lastUsage = buildTurnUsage({
-          contextLength,
-          currentCumulativeUsage: completedTurnCumulativeUsage,
-          previousCumulativeUsage,
-          isResume: Boolean(initialThreadId)
-        });
-        await this.updateUsage({
-          lastUsage,
-          cumulativeUsage: completedTurnCumulativeUsage
-        });
+        await this.updateContextLength(contextLength);
       }
       if (!result.sawTerminalEvent && !emittedError) {
         await this.renderErrorText("Codex exited without a terminal JSON event.");

@@ -251,17 +251,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
   assert.equal(runnerFactory.runs[1].params.yolo, true);
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
-  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
-    contextLength: 21300,
-    inputTokens: 21000,
-    outputTokens: 300,
-    cacheReadTokens: 0
-  });
-  assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
-    inputTokens: 21000,
-    cachedInputTokens: 0,
-    outputTokens: 300
-  });
+  assert.equal(stateStore.getChatState("primary", 1001).contextLength, 21300);
   assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
 });
 
@@ -362,31 +352,18 @@ test("abort clears queue but keeps existing thread id", async () => {
   assert.equal(fakeBotApi.messages.at(-1).text, "Aborted current run and cleared the queue\\.");
 });
 
-test("new session clears persisted thread id and usage", async () => {
+test("new session clears persisted thread id and context length", async () => {
   const { session, stateStore, fakeBotApi } = await createSession();
   await session.updateThreadId("thread-old");
-  await session.updateUsage({
-    lastUsage: {
-      contextLength: 1200,
-      inputTokens: 1000,
-      outputTokens: 200,
-      cacheReadTokens: 0
-    },
-    cumulativeUsage: {
-      inputTokens: 1000,
-      cachedInputTokens: 0,
-      outputTokens: 200
-    }
-  });
+  await session.updateContextLength(1200);
 
   await session.handleNewSession();
 
   assert.equal(session.threadId, null);
-  assert.equal(session.lastUsage, null);
+  assert.equal(session.contextLength, null);
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
-    lastUsage: null,
-    cumulativeUsage: null,
+    contextLength: null,
     yolo: null,
     model: null,
     reasoningEffort: null
@@ -468,30 +445,17 @@ test("/workdir updates config, clears persisted session state, and affects the n
   const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
   const { session, stateStore, fakeBotApi, runnerFactory, configStore } = await createSession();
   await session.updateThreadId("thread-old");
-  await session.updateUsage({
-    lastUsage: {
-      contextLength: 1200,
-      inputTokens: 1000,
-      outputTokens: 200,
-      cacheReadTokens: 0
-    },
-    cumulativeUsage: {
-      inputTokens: 1000,
-      cachedInputTokens: 0,
-      outputTokens: 200
-    }
-  });
+  await session.updateContextLength(1200);
 
   await session.handleWorkdir(nextWorkdir);
 
   assert.equal(session.botConfig.workdir, nextWorkdir);
   assert.equal(session.threadId, null);
-  assert.equal(session.lastUsage, null);
+  assert.equal(session.contextLength, null);
   assert.equal(configStore.patches.at(-1).patch.workdir, nextWorkdir);
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
-    lastUsage: null,
-    cumulativeUsage: null,
+    contextLength: null,
     yolo: null,
     model: null,
     reasoningEffort: null
@@ -531,30 +495,13 @@ test("/workdir leaves workdir and thread state unchanged when config persistence
   configStore.failure = new Error("disk full");
   const { session, stateStore, fakeBotApi } = await createSession({ configStore });
   await session.updateThreadId("thread-old");
-  await session.updateUsage({
-    lastUsage: {
-      contextLength: 1200,
-      inputTokens: 1000,
-      outputTokens: 200,
-      cacheReadTokens: 0
-    },
-    cumulativeUsage: {
-      inputTokens: 1000,
-      cachedInputTokens: 0,
-      outputTokens: 200
-    }
-  });
+  await session.updateContextLength(1200);
 
   await session.handleWorkdir(nextWorkdir);
 
   assert.equal(session.botConfig.workdir, "/tmp/project");
   assert.equal(session.threadId, "thread-old");
-  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
-    contextLength: 1200,
-    inputTokens: 1000,
-    outputTokens: 200,
-    cacheReadTokens: 0
-  });
+  assert.equal(stateStore.getChatState("primary", 1001).contextLength, 1200);
   assert.equal(fakeBotApi.messages.at(-1).text, "Failed to persist workdir setting: disk full");
 });
 
@@ -562,23 +509,11 @@ test("/workdir rolls back config and in-memory workdir if clearing the session s
   const nextWorkdir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-workdir-"));
   const { session, stateStore, configStore, fakeBotApi } = await createSession();
   await session.updateThreadId("thread-old");
-  await session.updateUsage({
-    lastUsage: {
-      contextLength: 1200,
-      inputTokens: 1000,
-      outputTokens: 200,
-      cacheReadTokens: 0
-    },
-    cumulativeUsage: {
-      inputTokens: 1000,
-      cachedInputTokens: 0,
-      outputTokens: 200
-    }
-  });
+  await session.updateContextLength(1200);
 
   const originalPatchChatState = stateStore.patchChatState.bind(stateStore);
   stateStore.patchChatState = async (botName, chatId, patch) => {
-    if (patch.threadId === null && patch.lastUsage === null && patch.cumulativeUsage === null) {
+    if (patch.threadId === null && patch.contextLength === null) {
       throw new Error("state write failed");
     }
     return originalPatchChatState(botName, chatId, patch);
@@ -592,19 +527,14 @@ test("/workdir rolls back config and in-memory workdir if clearing the session s
     { workdir: nextWorkdir },
     { workdir: "/tmp/project" }
   ]);
-  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
-    contextLength: 1200,
-    inputTokens: 1000,
-    outputTokens: 200,
-    cacheReadTokens: 0
-  });
+  assert.equal(stateStore.getChatState("primary", 1001).contextLength, 1200);
   assert.equal(
     fakeBotApi.messages.at(-1).text,
     "Failed to reset session after changing workdir: state write failed"
   );
 });
 
-test("resumed sessions without prior cumulative totals keep usage deltas unknown", async () => {
+test("resumed sessions keep the latest context length", async () => {
   const { session, runnerFactory, stateStore } = await createSession();
   session.threadId = "thread-existing";
 
@@ -622,19 +552,9 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
   });
   runnerFactory.runs[0].finish();
 
-  await waitFor(() => stateStore.getChatState("primary", 1001).lastUsage !== null);
+  await waitFor(() => stateStore.getChatState("primary", 1001).contextLength !== null);
 
-  assert.deepEqual(stateStore.getChatState("primary", 1001).lastUsage, {
-    contextLength: 21300,
-    inputTokens: null,
-    outputTokens: null,
-    cacheReadTokens: null
-  });
-  assert.deepEqual(stateStore.getChatState("primary", 1001).cumulativeUsage, {
-    inputTokens: 25000,
-    cachedInputTokens: 18000,
-    outputTokens: 420
-  });
+  assert.equal(stateStore.getChatState("primary", 1001).contextLength, 21300);
   assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
   assert.equal(stateStore.getChatState("primary", 1001).model, null);
   assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, null);
@@ -642,12 +562,7 @@ test("resumed sessions without prior cumulative totals keep usage deltas unknown
 
 test("status shows the latest context length", async () => {
   const { session } = await createSession();
-  session.lastUsage = {
-    contextLength: 18321,
-    inputTokens: 17890,
-    outputTokens: 431,
-    cacheReadTokens: 12000
-  };
+  session.contextLength = 18321;
 
   assert.equal(
     session.statusText(),
@@ -771,7 +686,7 @@ test("runtime settings changes fail entirely when config persistence fails", asy
   assert.equal(fakeBotApi.messages.at(-1).text, "Failed to persist model setting: disk full");
 });
 
-test("state store reads only the current usage schema", async () => {
+test("state store reads only the current context length schema", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-state-"));
   const statePath = path.join(tempDir, "state.json");
   await fs.writeFile(
@@ -782,17 +697,7 @@ test("state store reads only the current usage schema", async () => {
           chats: {
             "1001": {
               threadId: "thread-legacy",
-              lastUsage: {
-                contextLength: 21300,
-                inputTokens: 21000,
-                outputTokens: 300,
-                cacheReadTokens: 15000
-              },
-              cumulativeUsage: {
-                inputTokens: 21000,
-                cachedInputTokens: 15000,
-                outputTokens: 300
-              }
+              contextLength: 21300
             }
           }
         }
@@ -806,17 +711,7 @@ test("state store reads only the current usage schema", async () => {
 
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: "thread-legacy",
-    lastUsage: {
-      contextLength: 21300,
-      inputTokens: 21000,
-      outputTokens: 300,
-      cacheReadTokens: 15000
-    },
-    cumulativeUsage: {
-      inputTokens: 21000,
-      cachedInputTokens: 15000,
-      outputTokens: 300
-    },
+    contextLength: 21300,
     yolo: null,
     model: null,
     reasoningEffort: null

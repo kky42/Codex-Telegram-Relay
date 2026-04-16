@@ -37,12 +37,7 @@ test("fixture events produce only visible actions and usage updates", async () =
       text: "command-probe-ok"
     },
     {
-      kind: "turn_completed",
-      cumulativeUsage: {
-        inputTokens: 20971,
-        cachedInputTokens: 15616,
-        outputTokens: 181
-      }
+      kind: "turn_completed"
     }
   ]);
 });

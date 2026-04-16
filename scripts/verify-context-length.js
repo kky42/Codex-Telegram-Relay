@@ -8,7 +8,7 @@ import process from "node:process";
 import { ChatSession } from "../src/bot-runtime.js";
 import { StateStore } from "../src/state-store.js";
 import { startCodexRun } from "../src/codex-runner.js";
-import { readContextLengthForThread } from "../src/codex-usage.js";
+import { readContextLengthForThread } from "../src/context-length.js";
 import { toErrorMessage } from "../src/utils.js";
 
 class SilentBotApi {
@@ -182,8 +182,7 @@ async function main(argv = process.argv.slice(2)) {
       await session.enqueueMessage(message);
       await waitForIdle(session, runOutcomes);
 
-      const currentUsage = session.lastUsage;
-      const currentContextLength = currentUsage?.contextLength ?? null;
+      const currentContextLength = session.contextLength ?? null;
       const previousContextLength = observations.at(-1)?.contextLength ?? null;
       const observation = {
         round: index + 1,
