@@ -98,7 +98,7 @@ async function createRuntime(options = {}) {
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
       schedules: [],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default",
       ...options.botConfig
@@ -130,12 +130,13 @@ test("/schedule add, list, pause, resume, and delete manage schedules for the cu
   const { runtime, fakeBotApi, configStore } = await createRuntime();
 
   await runtime.handleMessage(
-    buildMessage("/schedule add daily-report\n0 9 * * 1-5\n\nsummarize repo changes")
+    buildMessage("/schedule add daily-report medium\n0 9 * * 1-5\n\nsummarize repo changes")
   );
 
   assert.deepEqual(runtime.botConfig.schedules, [
     {
       name: "daily-report",
+      auto: "medium",
       cron: "0 9 * * 1-5",
       prompt: "summarize repo changes",
       chatId: 1001,
@@ -168,6 +169,7 @@ test("/schedule run uses an ephemeral codex run and sends only the last agent me
       schedules: [
         {
           name: "daily-report",
+          auto: "low",
           cron: "0 9 * * 1-5",
           prompt: "summarize repo changes",
           chatId: 1001,
@@ -181,6 +183,7 @@ test("/schedule run uses an ephemeral codex run and sends only the last agent me
   await waitFor(() => runnerFactory.runs.length === 1);
   assert.equal(runnerFactory.runs[0].params.threadId, null);
   assert.equal(runnerFactory.runs[0].params.ephemeral, true);
+  assert.equal(runnerFactory.runs[0].params.autoMode, "low");
   assert.match(runnerFactory.runs[0].params.outputLastMessagePath, /last-message\.txt$/);
 
   await fs.writeFile(runnerFactory.runs[0].params.outputLastMessagePath, "final scheduled answer", "utf8");
@@ -198,6 +201,7 @@ test("tickSchedules triggers matching schedules only once per minute", async () 
       schedules: [
         {
           name: "hourly-report",
+          auto: "high",
           cron: "0 9 * * 1-5",
           prompt: "hourly summary",
           chatId: 1001,

@@ -37,6 +37,20 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 npm start
 - Keep examples and tests generic. Use placeholders such as `YOUR_TELEGRAM_BOT_TOKEN` and `your-telegram-username`.
 - Before committing, scan staged changes for secrets or personal paths and remove them.
 
+## Relay Behavior Decisions
+
+- The relay uses `auto` levels instead of the previous two-state `yolo` mode.
+- Bot-level and chat-level `auto` values use three levels:
+  - `low` => `codex exec --sandbox read-only`
+  - `medium` => `codex exec --sandbox workspace-write`
+  - `high` => `codex exec --dangerously-bypass-approvals-and-sandbox`
+- Schedules must define their own `auto` level. Scheduled runs do not inherit the current chat session's `auto` level.
+- Scheduled runs are independent ephemeral Codex executions. They do not reuse the interactive chat thread.
+- Scheduled run replies may interleave with normal interactive replies in the same Telegram chat. This is expected behavior.
+- `/abort` only affects the interactive run and queued interactive messages for the current chat. It does not cancel scheduled runs.
+- Because scheduled runs are independent and may target the same workspace as an interactive run, concurrent edits or other workspace contention are expected and accepted by design.
+- The in-memory once-per-minute schedule suppression is not persisted across relay restarts. If the relay restarts during a matching minute, a schedule may fire again. This is an accepted tradeoff for now.
+
 ## Release Automation
 
 - npm publishing is handled by GitHub Actions in [`.github/workflows/publish.yml`](.github/workflows/publish.yml).

@@ -147,7 +147,7 @@ async function main(argv = process.argv.slice(2)) {
       token: "unused",
       workdir: args.workdir,
       allowedUsernames: [],
-      yolo: false
+      auto: "low"
     },
     botApi,
     stateStore,

@@ -26,16 +26,17 @@ Example:
       "name": "primary",
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
       "workdir": "/Users/you/project",
+      "auto": "high",
       "schedules": [
         {
           "name": "daily-report",
+          "auto": "medium",
           "cron": "0 9 * * 1-5",
           "prompt": "Summarize the most important repo changes today.",
           "chatId": 123456789,
           "enabled": true
         }
       ],
-      "yolo": true,
       "model": "default",
       "reasoningEffort": "default"
     }
@@ -50,12 +51,14 @@ Notes:
 - `allowedUsernames` matching is case-insensitive and accepts values with or without `@`.
 - `name` must be unique and may contain only letters, numbers, `_`, and `-`.
 - `workdir` is optional. If omitted, the relay uses your home directory. It must already exist.
+- `auto` defaults to `high`.
 - `schedules` is optional. Each schedule is tied to one Telegram private chat by `chatId`.
+- Each schedule must define its own `auto` level.
 - Schedule `cron` uses the standard five-field numeric format: `minute hour day-of-month month day-of-week`.
-- `yolo` defaults to `true`.
 - `model` and `reasoningEffort` default to `default`, which means the relay does not pass an override to `codex exec`.
-- `yolo: false` maps to `codex exec --sandbox read-only`.
-- `yolo: true` maps to `codex exec --dangerously-bypass-approvals-and-sandbox`.
+- `auto: low` maps to `codex exec --sandbox read-only`.
+- `auto: medium` maps to `codex exec --sandbox workspace-write`.
+- `auto: high` maps to `codex exec --dangerously-bypass-approvals-and-sandbox`.
 - If you do not know your Telegram username, send the bot any message once. The unauthorized reply shows the normalized username to add.
 - Multiple bots can be configured in one file and run in one process.
 
@@ -82,18 +85,17 @@ Useful PM2 commands:
 
 ## Telegram Commands
 
-- `/status` shows running state, current workdir, yolo/model/reasoning values, the latest context length, and the queued messages for the current chat.
+- `/status` shows running state, current workdir, auto/model/reasoning values, the latest context length, and the queued messages for the current chat.
 - `/schedule list` shows schedules for the current chat.
-- `/schedule add <name>` creates a schedule for the current chat. Put the cron expression on the next line, then the prompt below it.
+- `/schedule add <name> <auto>` creates a schedule for the current chat. Put the cron expression on the next line, then the prompt below it.
 - `/schedule pause <name>` pauses a schedule for the current chat.
 - `/schedule resume <name>` resumes a paused schedule for the current chat.
 - `/schedule delete <name>` deletes a schedule for the current chat.
 - `/schedule run <name>` starts a schedule immediately.
 - `/workdir` shows the current bot workdir.
 - `/workdir <path>` changes the bot workdir. Only absolute paths and `~/...` are accepted.
-- `/yolo` toggles between read-only and full-access for future runs in the current chat and persists the bot default.
-- `/yolo on` switches to full-access mode.
-- `/yolo off` switches to read-only mode.
+- `/auto` shows the current auto level.
+- `/auto <low|medium|high>` sets the auto level for future runs in the current chat and persists the bot default.
 - `/model` shows the current model value.
 - `/model <value>` sets the model for future runs in the current chat and persists the bot default. Use `/model default` to return to CLI defaults.
 - `/reasoning` shows the current reasoning value.
@@ -112,11 +114,13 @@ Useful PM2 commands:
 - Telegram media albums are grouped by `media_group_id` and submitted as one logical Codex turn.
 - Attachments larger than 20 MB are rejected.
 - Fresh prompts use `codex exec --json --skip-git-repo-check`; continued prompts use `codex exec resume`.
-- Scheduled prompts use a fresh `codex exec --ephemeral --output-last-message ...` run and send only the last `agent_message` back to Telegram, prefixed with `[schedule: <name>]`.
-- The relay persists `threadId` from `thread.started` and cumulative usage from `turn.completed`.
+- Scheduled prompts use a fresh `codex exec --ephemeral --output-last-message ...` run with the schedule's own `auto` level and send only the last `agent_message` back to Telegram, prefixed with `[schedule: <name>]`.
+- Scheduled runs are independent from the chat's interactive session and their messages may interleave with normal replies in the same chat.
+- The relay persists `threadId` from `thread.started` and the latest `context_length` for the chat.
 - `context_length` is derived from the final `token_count.last_token_usage` event in the thread's rollout file under `~/.codex/sessions/...`.
 - Completed `agent_message` items become the visible final reply.
 - Non-message items such as `reasoning`, `web_search`, and `command_execution` reuse one in-flight Telegram message that is edited as progress changes.
 - Slash commands that change bot settings persist those defaults to `config.json`. They apply immediately to the invoking chat; other already-loaded chats keep their current in-memory settings until restart.
 - `/clear_cache` is bot-wide. It clears only `~/.codex-telegram-relay/cache/<bot-name>/` and refuses to run while turns or media albums are pending.
 - `/workdir <path>` is bot-wide. It updates the stored bot workdir, aborts the invoking chat's current run, clears that chat's queue, and resets that chat to a fresh Codex session.
+- `/abort` affects only the interactive run and queue for the current chat. It does not cancel scheduled runs.

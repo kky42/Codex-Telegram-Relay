@@ -1,6 +1,6 @@
 import { summarizeTurn } from "./attachments.js";
+import { formatAuto } from "./auto-mode.js";
 import { splitPlainText } from "./utils.js";
-import { formatYolo } from "./yolo.js";
 
 const MARKDOWN_V2_SPECIAL_CHARS = /[_*[\]()~`>#+\-=|{}.!\\]/g;
 
@@ -23,7 +23,7 @@ export function summarizeQueue(queue) {
 export function renderStatusMessage({
   isRunning,
   workdir,
-  yolo,
+  auto,
   model,
   reasoningEffort,
   usage,
@@ -32,7 +32,7 @@ export function renderStatusMessage({
   const lines = [
     `running: ${isRunning ? "yes" : "no"}`,
     `workdir: ${workdir}`,
-    `yolo: ${formatYolo(yolo)}`,
+    `auto: ${formatAuto(auto)}`,
     `model: ${model}`,
     `reasoning_effort: ${reasoningEffort}`,
     `context_length: ${usage.contextLength}`,

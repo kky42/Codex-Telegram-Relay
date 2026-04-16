@@ -1,3 +1,5 @@
+import { normalizeAutoMode } from "./auto-mode.js";
+
 const SCHEDULE_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function assertObject(value, fieldPath) {
@@ -177,6 +179,7 @@ export function normalizeSchedule(rawSchedule, fieldPath) {
   if (!Number.isSafeInteger(chatId)) {
     throw new Error(`${fieldPath}.chatId must be a safe integer`);
   }
+  const auto = normalizeAutoMode(rawSchedule.auto, `${fieldPath}.auto`);
 
   let enabled = true;
   if (Object.hasOwn(rawSchedule, "enabled")) {
@@ -191,6 +194,7 @@ export function normalizeSchedule(rawSchedule, fieldPath) {
     cron,
     prompt: rawSchedule.prompt.trim(),
     chatId,
+    auto,
     enabled
   };
 }

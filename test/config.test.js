@@ -11,20 +11,20 @@ test("normalizeConfig applies top-level allowed usernames and normalizes usernam
         name: "primary",
         token: "token-1",
         allowedUsernames: ["@AllowedUser"],
-        yolo: true
+        auto: "high"
       }
     ]
   });
 
   assert.equal(config.bots[0].name, "primary");
   assert.deepEqual(config.bots[0].allowedUsernames, ["owneruser", "alloweduser"]);
-  assert.equal(config.bots[0].yolo, true);
+  assert.equal(config.bots[0].auto, "high");
   assert.equal(config.bots[0].model, "default");
   assert.equal(config.bots[0].reasoningEffort, "default");
   assert.deepEqual(config.bots[0].schedules, []);
 });
 
-test("normalizeConfig defaults yolo/model/reasoningEffort", () => {
+test("normalizeConfig defaults auto/model/reasoningEffort", () => {
   const config = normalizeConfig({
     bots: [
       {
@@ -35,7 +35,7 @@ test("normalizeConfig defaults yolo/model/reasoningEffort", () => {
   });
 
   assert.deepEqual(config.bots[0].allowedUsernames, []);
-  assert.equal(config.bots[0].yolo, true);
+  assert.equal(config.bots[0].auto, "high");
   assert.equal(config.bots[0].model, "default");
   assert.equal(config.bots[0].reasoningEffort, "default");
 });
@@ -71,7 +71,7 @@ test("normalizeConfig rejects missing workdir paths", () => {
   );
 });
 
-test("normalizeConfig rejects non-boolean yolo values", () => {
+test("normalizeConfig rejects unknown auto values", () => {
   assert.throws(
     () =>
       normalizeConfig({
@@ -79,11 +79,11 @@ test("normalizeConfig rejects non-boolean yolo values", () => {
           {
             name: "primary",
             token: "token-1",
-            yolo: "interactive"
+            auto: "interactive"
           }
         ]
     }),
-    /yolo must be a boolean/
+    /auto must be one of: low, medium, high/
   );
 });
 
@@ -112,6 +112,7 @@ test("normalizeConfig includes normalized schedules", () => {
         schedules: [
           {
             name: "daily-report",
+            auto: "medium",
             cron: "0 9 * * 1-5",
             prompt: "summarize",
             chatId: 1001
@@ -124,6 +125,7 @@ test("normalizeConfig includes normalized schedules", () => {
   assert.deepEqual(config.bots[0].schedules, [
     {
       name: "daily-report",
+      auto: "medium",
       cron: "0 9 * * 1-5",
       prompt: "summarize",
       chatId: 1001,

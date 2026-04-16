@@ -27,6 +27,7 @@ test("normalizeBotSchedules normalizes configured schedules", () => {
     [
       {
         name: "daily-report",
+        auto: "medium",
         cron: "0 9 * * 1-5",
         prompt: "summarize repo changes",
         chatId: 123,
@@ -39,6 +40,7 @@ test("normalizeBotSchedules normalizes configured schedules", () => {
   assert.deepEqual(schedules, [
     {
       name: "daily-report",
+      auto: "medium",
       cron: "0 9 * * 1-5",
       prompt: "summarize repo changes",
       chatId: 123,
@@ -54,12 +56,14 @@ test("normalizeBotSchedules rejects duplicate names in the same chat", () => {
         [
           {
             name: "daily-report",
+            auto: "high",
             cron: "0 9 * * 1-5",
             prompt: "one",
             chatId: 123
           },
           {
             name: "Daily-Report",
+            auto: "low",
             cron: "0 10 * * 1-5",
             prompt: "two",
             chatId: 123

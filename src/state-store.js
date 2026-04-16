@@ -1,8 +1,8 @@
+import { readPersistedAuto } from "./auto-mode.js";
 import {
   readPersistedModel,
   readPersistedReasoningEffort
 } from "./runtime-settings.js";
-import { readPersistedYolo } from "./yolo.js";
 import { readJsonFile, writeJsonFileAtomic } from "./utils.js";
 
 function normalizeContextLength(value) {
@@ -35,7 +35,7 @@ export class StateStore {
     return {
       threadId: typeof chatState.threadId === "string" && chatState.threadId ? chatState.threadId : null,
       contextLength: normalizeContextLength(chatState.contextLength),
-      yolo: readPersistedYolo(chatState),
+      auto: readPersistedAuto(chatState),
       model: readPersistedModel(chatState),
       reasoningEffort: readPersistedReasoningEffort(chatState)
     };
@@ -63,8 +63,8 @@ export class StateStore {
         delete next.contextLength;
       }
 
-      if (typeof next.yolo !== "boolean") {
-        delete next.yolo;
+      if (typeof next.auto !== "string") {
+        delete next.auto;
       }
 
       if (typeof next.model !== "string") {

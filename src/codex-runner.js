@@ -1,11 +1,16 @@
 import { spawn } from "node:child_process";
 
+import {
+  AUTO_DEFAULT,
+  AUTO_LEVEL_LOW,
+  AUTO_LEVEL_MEDIUM,
+  normalizeAutoMode
+} from "./auto-mode.js";
 import { parseJsonlLine } from "./codex-events.js";
 import {
   DEFAULT_MODEL,
   DEFAULT_REASONING_EFFORT
 } from "./runtime-settings.js";
-import { YOLO_DEFAULT } from "./yolo.js";
 
 function buildConfigOverrideArg(key, rawValue) {
   return `${key}=${JSON.stringify(String(rawValue))}`;
@@ -22,13 +27,17 @@ export function buildCodexArgs({
   imagePaths = [],
   outputLastMessagePath = null,
   ephemeral = false,
-  yolo = YOLO_DEFAULT,
+  autoMode = AUTO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT
 }) {
-  const modeArgs = yolo
-    ? ["--dangerously-bypass-approvals-and-sandbox"]
-    : ["--sandbox", "read-only"];
+  const normalizedAutoMode = normalizeAutoMode(autoMode, "autoMode");
+  const modeArgs =
+    normalizedAutoMode === AUTO_LEVEL_LOW
+      ? ["--sandbox", "read-only"]
+      : normalizedAutoMode === AUTO_LEVEL_MEDIUM
+        ? ["--sandbox", "workspace-write"]
+        : ["--dangerously-bypass-approvals-and-sandbox"];
   const modelArgs = model === DEFAULT_MODEL ? [] : ["--model", model];
   const reasoningArgs =
     reasoningEffort === DEFAULT_REASONING_EFFORT
@@ -66,7 +75,7 @@ export function startCodexRun({
   imagePaths = [],
   outputLastMessagePath = null,
   ephemeral = false,
-  yolo = YOLO_DEFAULT,
+  autoMode = AUTO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT,
   forceKillDelayMs = 3000,
@@ -80,7 +89,7 @@ export function startCodexRun({
     imagePaths,
     outputLastMessagePath,
     ephemeral,
-    yolo,
+    autoMode,
     model,
     reasoningEffort
   });

@@ -157,7 +157,7 @@ async function createSession(options = {}) {
     token: "token",
     workdir: "/tmp/project",
     allowedUsernames: ["alloweduser"],
-    yolo: true,
+    auto: "high",
     model: "default",
     reasoningEffort: "default",
     ...options.botConfig
@@ -193,7 +193,7 @@ async function createRuntime(options = {}) {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default",
       ...options.botConfig
@@ -215,7 +215,7 @@ test("session queues incoming messages and resumes with persisted thread id", as
   await session.enqueueMessage("first");
   assert.equal(runnerFactory.runs.length, 1);
   assert.equal(runnerFactory.runs[0].params.threadId, null);
-  assert.equal(runnerFactory.runs[0].params.yolo, true);
+  assert.equal(runnerFactory.runs[0].params.autoMode, "high");
   assert.equal(runnerFactory.runs[0].params.model, "default");
   assert.equal(runnerFactory.runs[0].params.reasoningEffort, "default");
 
@@ -249,10 +249,10 @@ test("session queues incoming messages and resumes with persisted thread id", as
 
   assert.equal(runnerFactory.runs.length, 2);
   assert.equal(runnerFactory.runs[1].params.threadId, "thread-abc");
-  assert.equal(runnerFactory.runs[1].params.yolo, true);
+  assert.equal(runnerFactory.runs[1].params.autoMode, "high");
   assert.equal(stateStore.getChatState("primary", 1001).threadId, "thread-abc");
   assert.equal(stateStore.getChatState("primary", 1001).contextLength, 21300);
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
+  assert.equal(stateStore.getChatState("primary", 1001).auto, null);
 });
 
 test("session stages photo attachments and passes image paths to Codex", async () => {
@@ -364,7 +364,7 @@ test("new session clears persisted thread id and context length", async () => {
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
     contextLength: null,
-    yolo: null,
+    auto: null,
     model: null,
     reasoningEffort: null
   });
@@ -456,7 +456,7 @@ test("/workdir updates config, clears persisted session state, and affects the n
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: null,
     contextLength: null,
-    yolo: null,
+    auto: null,
     model: null,
     reasoningEffort: null
   });
@@ -555,7 +555,7 @@ test("resumed sessions keep the latest context length", async () => {
   await waitFor(() => stateStore.getChatState("primary", 1001).contextLength !== null);
 
   assert.equal(stateStore.getChatState("primary", 1001).contextLength, 21300);
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, null);
+  assert.equal(stateStore.getChatState("primary", 1001).auto, null);
   assert.equal(stateStore.getChatState("primary", 1001).model, null);
   assert.equal(stateStore.getChatState("primary", 1001).reasoningEffort, null);
 });
@@ -569,7 +569,7 @@ test("status shows the latest context length", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
-      "yolo: on",
+      "auto: high",
       "model: default",
       "reasoning_effort: default",
       "context_length: 18.3k",
@@ -593,7 +593,7 @@ test("status summarizes queued attachment turns", async () => {
     [
       "running: no",
       "workdir: /tmp/project",
-      "yolo: on",
+      "auto: high",
       "model: default",
       "reasoning_effort: default",
       "context_length: n/a",
@@ -603,31 +603,39 @@ test("status summarizes queued attachment turns", async () => {
   );
 });
 
-test("yolo toggles future runs and persists the override", async () => {
+test("/auto updates future runs and persists the override", async () => {
   const { session, runnerFactory, stateStore, fakeBotApi, configStore } = await createSession();
 
-  await session.handleYolo("");
+  await session.handleAuto("low");
 
-  assert.equal(session.yolo, false);
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, false);
-  assert.equal(configStore.patches.at(-1).patch.yolo, false);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
+  assert.equal(session.auto, "low");
+  assert.equal(stateStore.getChatState("primary", 1001).auto, "low");
+  assert.equal(configStore.patches.at(-1).patch.auto, "low");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low\\.");
 
   await session.enqueueMessage("hello");
 
-  assert.equal(runnerFactory.runs[0].params.yolo, false);
+  assert.equal(runnerFactory.runs[0].params.autoMode, "low");
 });
 
-test("yolo accepts explicit on and off values", async () => {
+test("/auto accepts explicit low, medium, and high values", async () => {
   const { session, fakeBotApi } = await createSession();
 
-  await session.handleYolo("on");
-  assert.equal(session.yolo, true);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to on\\.");
+  await session.handleAuto("medium");
+  assert.equal(session.auto, "medium");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to medium\\.");
 
-  await session.handleYolo("off");
-  assert.equal(session.yolo, false);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
+  await session.handleAuto("high");
+  assert.equal(session.auto, "high");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to high\\.");
+});
+
+test("/auto without args returns the current value", async () => {
+  const { session, fakeBotApi } = await createSession();
+
+  await session.handleAuto("");
+
+  assert.equal(fakeBotApi.messages.at(-1).text, "Current auto level: high\\.");
 });
 
 test("/model without args returns the current model", async () => {
@@ -712,7 +720,7 @@ test("state store reads only the current context length schema", async () => {
   assert.deepEqual(stateStore.getChatState("primary", 1001), {
     threadId: "thread-legacy",
     contextLength: 21300,
-    yolo: null,
+    auto: null,
     model: null,
     reasoningEffort: null
   });
@@ -1017,7 +1025,7 @@ test("unauthorized users are told which Telegram username to allow", async () =>
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default"
     },
@@ -1129,7 +1137,7 @@ test("runtime refuses to clear cache while bot work is pending", async () => {
   );
 });
 
-test("runtime routes /yolo to the session", async () => {
+test("runtime routes /auto to the session", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-"));
   const stateStore = new StateStore(path.join(tempDir, "state.json"));
   await stateStore.load();
@@ -1141,7 +1149,7 @@ test("runtime routes /yolo to the session", async () => {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default"
     },
@@ -1152,11 +1160,11 @@ test("runtime routes /yolo to the session", async () => {
   await runtime.handleMessage({
     chat: { id: 1001, type: "private" },
     from: { id: 42, username: "AllowedUser" },
-    text: "/yolo"
+    text: "/auto low"
   });
 
-  assert.equal(stateStore.getChatState("primary", 1001).yolo, false);
-  assert.equal(fakeBotApi.messages.at(-1).text, "Yolo set to off\\.");
+  assert.equal(stateStore.getChatState("primary", 1001).auto, "low");
+  assert.equal(fakeBotApi.messages.at(-1).text, "Auto level set to low\\.");
 });
 
 test("runtime routes /model and /reasoning to the session", async () => {
@@ -1171,7 +1179,7 @@ test("runtime routes /model and /reasoning to the session", async () => {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default"
     },
@@ -1211,7 +1219,7 @@ test("runtime routes /workdir to the session", async () => {
       token: "token",
       workdir: "/tmp/project",
       allowedUsernames: ["alloweduser"],
-      yolo: true,
+      auto: "high",
       model: "default",
       reasoningEffort: "default"
     },

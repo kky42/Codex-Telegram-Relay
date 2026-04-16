@@ -3,6 +3,11 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  AUTO_DEFAULT,
+  formatAuto,
+  parseAutoArgument
+} from "./auto-mode.js";
+import {
   ALBUM_QUIET_PERIOD_MS,
   ATTACHMENT_SIZE_LIMIT_BYTES,
   attachmentDescriptorFromMessage,
@@ -28,11 +33,6 @@ import {
   normalizeSettingArgument
 } from "./runtime-settings.js";
 import {
-  formatYolo,
-  parseYoloArgument,
-  YOLO_DEFAULT
-} from "./yolo.js";
-import {
   escapeTelegramMarkdown,
   renderStatusMessage
 } from "./render.js";
@@ -55,7 +55,7 @@ export const TELEGRAM_COMMANDS = [
   { command: "status", description: "Show current Codex status" },
   { command: "schedule", description: "Manage scheduled prompts for this chat" },
   { command: "workdir", description: "Show or change the bot workdir" },
-  { command: "yolo", description: "Toggle full-access Codex mode" },
+  { command: "auto", description: "Set Codex automation level for this chat" },
   { command: "model", description: "Set model for future runs" },
   { command: "reasoning", description: "Set reasoning effort for future runs" },
   { command: "clear_cache", description: "Clear cached attachments for this bot" },
@@ -82,14 +82,16 @@ function scheduleUsageText() {
   return [
     "Usage:",
     "/schedule list",
-    "/schedule add <name>",
+    "/schedule add <name> <auto>",
     "<cron>",
     "",
     "<prompt>",
     "/schedule pause <name>",
     "/schedule resume <name>",
     "/schedule delete <name>",
-    "/schedule run <name>"
+    "/schedule run <name>",
+    "",
+    "Auto levels: low, medium, high"
   ].join("\n");
 }
 
@@ -156,6 +158,16 @@ function parseScheduleCommandArgs(args) {
   };
 }
 
+function applyObjectPatch(target, patch) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) {
+      delete target[key];
+    } else {
+      target[key] = value;
+    }
+  }
+}
+
 export class ChatSession {
   constructor({
     botConfig,
@@ -180,7 +192,7 @@ export class ChatSession {
     const persisted = stateStore.getChatState(botConfig.name, chatId);
     this.threadId = persisted.threadId;
     this.contextLength = persisted.contextLength;
-    this.yolo = persisted.yolo ?? botConfig.yolo ?? YOLO_DEFAULT;
+    this.auto = persisted.auto ?? botConfig.auto ?? AUTO_DEFAULT;
     this.model = persisted.model ?? botConfig.model ?? DEFAULT_MODEL;
     this.reasoningEffort =
       persisted.reasoningEffort ?? botConfig.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
@@ -541,7 +553,7 @@ export class ChatSession {
     }
 
     await this.configStore.patchBotConfig(this.botConfig.name, patch);
-    Object.assign(this.botConfig, patch);
+    applyObjectPatch(this.botConfig, patch);
 
     return previousValues;
   }
@@ -554,7 +566,7 @@ export class ChatSession {
       throw error;
     }
 
-    Object.assign(this.botConfig, previousValues);
+    applyObjectPatch(this.botConfig, previousValues);
   }
 
   workdirValidationError() {
@@ -662,8 +674,8 @@ export class ChatSession {
 
   async applyRuntimeSettings(patch) {
     await this.persistRuntimeSettings(patch);
-    if (Object.hasOwn(patch, "yolo")) {
-      this.yolo = patch.yolo;
+    if (Object.hasOwn(patch, "auto")) {
+      this.auto = patch.auto;
     }
     if (Object.hasOwn(patch, "model")) {
       this.model = patch.model;
@@ -677,7 +689,7 @@ export class ChatSession {
     return renderStatusMessage({
       isRunning: this.isRunning,
       workdir: this.botConfig.workdir,
-      yolo: this.yolo,
+      auto: this.auto,
       model: this.model,
       reasoningEffort: this.reasoningEffort,
       usage: {
@@ -691,32 +703,35 @@ export class ChatSession {
     await this.sendText(this.statusText());
   }
 
-  async handleYolo(args) {
+  async handleAuto(args) {
     const normalized = String(args || "").trim();
-    const nextYolo = normalized ? parseYoloArgument(normalized) : !this.yolo;
-    if (normalized && nextYolo === null) {
-      await this.sendText(
-        "Unknown yolo value. Use /yolo, /yolo on, or /yolo off."
-      );
+    if (!normalized) {
+      await this.sendText(`Current auto level: ${formatAuto(this.auto)}.`);
       return;
     }
 
-    const previousYolo = this.yolo;
+    const nextAuto = parseAutoArgument(normalized);
+    if (nextAuto === null) {
+      await this.sendText("Unknown auto level. Use /auto, /auto low, /auto medium, or /auto high.");
+      return;
+    }
+
+    const previousAuto = this.auto;
     try {
-      await this.applyRuntimeSettings({ yolo: nextYolo });
+      await this.applyRuntimeSettings({ auto: nextAuto });
     } catch (error) {
-      await this.sendText(`Failed to persist yolo setting: ${toErrorMessage(error)}`);
+      await this.sendText(`Failed to persist auto level: ${toErrorMessage(error)}`);
       return;
     }
 
     if (this.isRunning) {
       await this.sendText(
-        `Yolo set to ${formatYolo(nextYolo)}. The current run stays on ${formatYolo(previousYolo)}; the next run will use ${formatYolo(nextYolo)}.`
+        `Auto level set to ${formatAuto(nextAuto)}. The current run stays on ${formatAuto(previousAuto)}; the next run will use ${formatAuto(nextAuto)}.`
       );
       return;
     }
 
-    await this.sendText(`Yolo set to ${formatYolo(nextYolo)}.`);
+    await this.sendText(`Auto level set to ${formatAuto(nextAuto)}.`);
   }
 
   async handleModel(args) {
@@ -852,7 +867,7 @@ export class ChatSession {
       threadId: this.threadId,
       message,
       imagePaths,
-      yolo: this.yolo,
+      autoMode: this.auto,
       model: this.model,
       reasoningEffort: this.reasoningEffort
     });
@@ -877,7 +892,7 @@ export class ChatSession {
       threadId: this.threadId,
       message,
       imagePaths,
-      yolo: this.yolo,
+      autoMode: this.auto,
       model: this.model,
       reasoningEffort: this.reasoningEffort,
       onEvent: async (event) => {
@@ -1064,7 +1079,7 @@ export class BotRuntime {
       "Schedules for this chat:",
       ...schedules.map(
         (schedule) =>
-          `- ${schedule.name}: ${schedule.enabled ? "on" : "paused"}, ${schedule.cron}`
+          `- ${schedule.name}: ${schedule.enabled ? "on" : "paused"}, ${schedule.auto}, ${schedule.cron}`
       )
     ].join("\n");
   }
@@ -1079,9 +1094,25 @@ export class BotRuntime {
       throw new Error(scheduleUsageText());
     }
 
-    const [nameToken] = normalizedRemainder.split(/\s+/, 1);
+    const headerNewlineIndex = normalizedRemainder.indexOf("\n");
+    if (headerNewlineIndex < 0) {
+      throw new Error(scheduleUsageText());
+    }
+
+    const header = normalizedRemainder.slice(0, headerNewlineIndex).trim();
+    const headerParts = header.split(/\s+/).filter(Boolean);
+    if (headerParts.length !== 2) {
+      throw new Error(scheduleUsageText());
+    }
+
+    const [nameToken, autoToken] = headerParts;
     const name = normalizeScheduleName(nameToken);
-    const body = normalizedRemainder.slice(nameToken.length).trimStart();
+    const auto = parseAutoArgument(autoToken);
+    if (auto === null) {
+      throw new Error("Unknown auto level. Use low, medium, or high.");
+    }
+
+    const body = normalizedRemainder.slice(headerNewlineIndex + 1).trimStart();
     const firstNewlineIndex = body.indexOf("\n");
     if (firstNewlineIndex < 0) {
       throw new Error(scheduleUsageText());
@@ -1093,7 +1124,7 @@ export class BotRuntime {
       throw new Error(scheduleUsageText());
     }
 
-    return { name, cron, prompt };
+    return { name, auto, cron, prompt };
   }
 
   async handleScheduleAdd(session, remainder) {
@@ -1127,7 +1158,9 @@ export class BotRuntime {
     }
 
     this.markScheduleCreated(schedule);
-    await session.sendText(`Schedule ${schedule.name} added with cron ${schedule.cron}.`);
+    await session.sendText(
+      `Schedule ${schedule.name} added with auto ${schedule.auto} and cron ${schedule.cron}.`
+    );
   }
 
   async updateSchedule(session, name, patch) {
@@ -1224,7 +1257,7 @@ export class BotRuntime {
       message: schedule.prompt,
       outputLastMessagePath: outputPath,
       ephemeral: true,
-      yolo: session.yolo,
+      autoMode: schedule.auto,
       model: session.model,
       reasoningEffort: session.reasoningEffort,
       onEvent: async () => {},
@@ -1450,11 +1483,14 @@ export class BotRuntime {
         case "schedule":
           await this.handleScheduleCommand(session, parsedCommand.args);
           return;
+        case "auto":
+          await session.handleAuto(parsedCommand.args);
+          return;
         case "workdir":
           await session.handleWorkdir(parsedCommand.args);
           return;
         case "yolo":
-          await session.handleYolo(parsedCommand.args);
+          await session.sendText("Use /auto low, /auto medium, or /auto high.");
           return;
         case "model":
           await session.handleModel(parsedCommand.args);

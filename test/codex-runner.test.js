@@ -44,7 +44,7 @@ test("buildCodexArgs uses dangerous bypass for full-access mode", () => {
   assert.deepEqual(buildCodexArgs({
     workdir: "/tmp/project",
     message: "hello",
-    yolo: true
+    autoMode: "high"
   }), [
     "exec",
     "-C",
@@ -56,11 +56,11 @@ test("buildCodexArgs uses dangerous bypass for full-access mode", () => {
   ]);
 });
 
-test("buildCodexArgs uses read-only sandbox when yolo is false", () => {
+test("buildCodexArgs uses read-only sandbox when auto mode is low", () => {
   assert.deepEqual(buildCodexArgs({
     workdir: "/tmp/project",
     message: "hello",
-    yolo: false
+    autoMode: "low"
   }), [
     "exec",
     "-C",
@@ -69,6 +69,23 @@ test("buildCodexArgs uses read-only sandbox when yolo is false", () => {
     "--skip-git-repo-check",
     "--sandbox",
     "read-only",
+    "hello"
+  ]);
+});
+
+test("buildCodexArgs uses workspace-write sandbox when auto mode is medium", () => {
+  assert.deepEqual(buildCodexArgs({
+    workdir: "/tmp/project",
+    message: "hello",
+    autoMode: "medium"
+  }), [
+    "exec",
+    "-C",
+    "/tmp/project",
+    "--json",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
     "hello"
   ]);
 });
