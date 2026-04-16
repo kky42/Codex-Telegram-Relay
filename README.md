@@ -2,6 +2,8 @@
 
 Run Codex from private Telegram chats.
 
+![codex in telegram example](./assets/example.png)
+
 ## Start
 
 Run it directly without installing the package globally:
@@ -23,10 +25,12 @@ Example:
   "allowedUsernames": ["your-telegram-username"],
   "bots": [
     {
-      "name": "primary",
+      "name": "anyname",
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
       "workdir": "/Users/you/project",
       "auto": "medium",
+      "model": "gpt-5.4",
+      "reasoningEffort": "xhigh"
       "schedules": [
         {
           "name": "daily-report",
@@ -37,8 +41,6 @@ Example:
           "enabled": true
         }
       ],
-      "model": "default",
-      "reasoningEffort": "default"
     }
   ]
 }
