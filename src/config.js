@@ -7,6 +7,7 @@ import {
   normalizeBotModel,
   normalizeBotReasoningEffort
 } from "./runtime-settings.js";
+import { normalizeBotSchedules } from "./schedules.js";
 import { normalizeBotYolo } from "./yolo.js";
 import {
   DEFAULT_CONFIG_PATH,
@@ -76,12 +77,14 @@ export function normalizeConfig(rawConfig, configPath = DEFAULT_CONFIG_PATH) {
       bot.allowedUsernames,
       `${prefix}.allowedUsernames`
     );
+    const schedules = normalizeBotSchedules(bot.schedules, `${prefix}.schedules`);
 
     return {
       name,
       token: bot.token.trim(),
       workdir,
       allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])],
+      schedules,
       yolo: normalizeBotYolo(bot, prefix),
       model: normalizeBotModel(bot, prefix),
       reasoningEffort: normalizeBotReasoningEffort(bot, prefix)

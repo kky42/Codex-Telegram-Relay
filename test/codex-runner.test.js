@@ -149,6 +149,26 @@ test("buildCodexArgs appends image flags before exec resume", () => {
   ]);
 });
 
+test("buildCodexArgs supports ephemeral last-message capture runs", () => {
+  assert.deepEqual(buildCodexArgs({
+    workdir: "/tmp/project",
+    message: "hello",
+    ephemeral: true,
+    outputLastMessagePath: "/tmp/last-message.txt"
+  }), [
+    "exec",
+    "-C",
+    "/tmp/project",
+    "--json",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "--output-last-message",
+    "/tmp/last-message.txt",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "hello"
+  ]);
+});
+
 test("startCodexRun invokes codex with exec-scoped workdir arguments", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-relay-args-"));
   const fakeCodexPath = path.join(tempDir, "codex");
