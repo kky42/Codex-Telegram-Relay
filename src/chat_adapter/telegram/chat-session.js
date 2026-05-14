@@ -390,6 +390,7 @@ export class ChatSession {
   statusText() {
     return renderStatusMessage({
       isRunning: this.isRunning,
+      cli: this.cliAdapter.id,
       workdir: this.workdir,
       auto: this.auto,
       model: this.model,

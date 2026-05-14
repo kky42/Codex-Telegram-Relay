@@ -22,6 +22,7 @@ export function summarizeQueue(queue) {
 
 export function renderStatusMessage({
   isRunning,
+  cli,
   workdir,
   auto,
   model,
@@ -31,6 +32,7 @@ export function renderStatusMessage({
 }) {
   const lines = [
     `running: ${isRunning ? "yes" : "no"}`,
+    `cli: ${cli}`,
     `workdir: ${workdir}`,
     `auto: ${formatAuto(auto)}`,
     `model: ${model}`,

@@ -83,6 +83,7 @@ test("status shows the latest context length", async () => {
     session.statusText(),
     [
       "running: no",
+      "cli: codex",
       "workdir: /tmp/project",
       "auto: medium",
       "model: default",
@@ -92,6 +93,16 @@ test("status shows the latest context length", async () => {
       "empty"
     ].join("\n")
   );
+});
+
+test("status shows the configured CLI", async () => {
+  const { session } = await createSession({
+    agent: {
+      cli: "pi"
+    }
+  });
+
+  assert.match(session.statusText(), /^cli: pi$/m);
 });
 
 test("/auto updates future runs and stays in memory", async () => {
