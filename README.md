@@ -20,7 +20,7 @@ AnyAgent in Telegram
 Install AnyAgent globally:
 
 ```bash
-npm install -g anyagent
+npm install -g @kky42/anyagent
 ```
 
 Create a Telegram bot with [BotFather](https://t.me/BotFather), then create an AnyAgent profile:
@@ -122,7 +122,7 @@ Examples:
 For always-on usage, install AnyAgent globally and run it with PM2:
 
 ```bash
-npm install -g anyagent pm2
+npm install -g @kky42/anyagent pm2
 pm2 start anyagent --name anyagent
 pm2 save
 ```
@@ -139,7 +139,7 @@ pm2 stop anyagent
 To update AnyAgent and restart the relay:
 
 ```bash
-npm install -g anyagent@latest
+npm install -g @kky42/anyagent@latest
 pm2 restart anyagent
 pm2 save
 ```

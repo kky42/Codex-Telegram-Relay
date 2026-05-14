@@ -1,5 +1,5 @@
 {
-  "name": "anyagent",
+  "name": "@kky42/anyagent",
   "version": "0.3.0",
   "description": "Lightweight chat relay for CLI coding agents",
   "type": "module",
@@ -18,6 +18,7 @@
     "bin",
     "src",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "engines": {

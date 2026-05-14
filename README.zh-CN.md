@@ -20,7 +20,7 @@ AnyAgent in Telegram
 全局安装 AnyAgent：
 
 ```bash
-npm install -g anyagent
+npm install -g @kky42/anyagent
 ```
 
 先用 [BotFather](https://t.me/BotFather) 创建一个 Telegram bot，然后创建 AnyAgent profile：
@@ -122,7 +122,7 @@ anyagent
 如果希望 AnyAgent 常驻后台运行，可以全局安装 AnyAgent 并用 PM2 管理：
 
 ```bash
-npm install -g anyagent pm2
+npm install -g @kky42/anyagent pm2
 pm2 start anyagent --name anyagent
 pm2 save
 ```
@@ -139,7 +139,7 @@ pm2 stop anyagent
 更新 AnyAgent 并重启 relay：
 
 ```bash
-npm install -g anyagent@latest
+npm install -g @kky42/anyagent@latest
 pm2 restart anyagent
 pm2 save
 ```
