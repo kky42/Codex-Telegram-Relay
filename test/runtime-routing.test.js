@@ -79,8 +79,10 @@ test("runtime aggregates media groups into one attachment turn", async () => {
 
   await waitFor(() => runnerFactory.runs.length === 1, 20);
 
-  assert.equal(runnerFactory.runs[0].params.message, "compare these");
-  assert.equal(runnerFactory.runs[0].params.imagePaths.length, 2);
+  assert.match(runnerFactory.runs[0].params.message, /^compare these\n\n<attachments>/);
+  assert.equal("imagePaths" in runnerFactory.runs[0].params, false);
+  assert.match(runnerFactory.runs[0].params.message, /msg101\.jpg" kind="photo"/);
+  assert.match(runnerFactory.runs[0].params.message, /msg102\.jpg" kind="photo"/);
   runnerFactory.runs[0].finish();
 });
 
@@ -185,6 +187,29 @@ test("runtime creates Claude-backed chat sessions from agent profile", async () 
 
   const session = runtime.sessionFor(1001);
   assert.equal(session.cliAdapter.id, "claude");
+  assert.equal(runnerFactory.runs.length, 1);
+  assert.equal(runnerFactory.runs[0].params.message, "hello");
+  runnerFactory.runs[0].finish();
+});
+
+test("runtime creates Pi-backed chat sessions from agent profile", async () => {
+  const { runtime, runnerFactory } = await createRuntime({
+    botConfig: {
+      agent: {
+        id: "pi-agent",
+        cli: "pi",
+        workdir: "/tmp/project",
+        auto: "medium",
+        model: "default",
+        reasoningEffort: "default"
+      }
+    }
+  });
+
+  await runtime.handleMessage(buildTextMessage("hello"));
+
+  const session = runtime.sessionFor(1001);
+  assert.equal(session.cliAdapter.id, "pi");
   assert.equal(runnerFactory.runs.length, 1);
   assert.equal(runnerFactory.runs[0].params.message, "hello");
   runnerFactory.runs[0].finish();

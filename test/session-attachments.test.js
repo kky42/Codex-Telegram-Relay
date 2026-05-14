@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { buildChatCacheDirName } from "../src/utils.js";
 import { createSession } from "./support/builders.js";
 
-test("session stages photo attachments and passes image paths to Codex", async () => {
+test("session stages photo attachments and passes path references to Codex", async () => {
   const { session, fakeBotApi, runnerFactory, cacheRootDir } = await createSession();
   fakeBotApi.registerFile("photo-1", {
     filePath: "photos/input.jpg",
@@ -24,16 +24,20 @@ test("session stages photo attachments and passes image paths to Codex", async (
   ]);
 
   assert.equal(runnerFactory.runs.length, 1);
-  assert.equal(runnerFactory.runs[0].params.message, "");
   assert.deepEqual(fakeBotApi.getFileCalls, ["photo-1"]);
-  assert.equal(runnerFactory.runs[0].params.imagePaths.length, 1);
-  assert.ok(
-    runnerFactory.runs[0].params.imagePaths[0].startsWith(
-      path.join(cacheRootDir, "telegram", "relaybot", buildChatCacheDirName(1001))
+  assert.equal("imagePaths" in runnerFactory.runs[0].params, false);
+  assert.match(runnerFactory.runs[0].params.message, /<attachments>/);
+  assert.match(
+    runnerFactory.runs[0].params.message,
+    new RegExp(
+      `path="${path.join(cacheRootDir, "telegram", "relaybot", buildChatCacheDirName(1001)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`
     )
   );
-  assert.equal(path.basename(runnerFactory.runs[0].params.imagePaths[0]), "msg11.jpg");
-  assert.equal(await fs.readFile(runnerFactory.runs[0].params.imagePaths[0], "utf8"), "jpg");
+  assert.match(runnerFactory.runs[0].params.message, /msg11\.jpg" kind="photo"/);
+  assert.equal(
+    await fs.readFile(path.join(cacheRootDir, "telegram", "relaybot", buildChatCacheDirName(1001), "msg11.jpg"), "utf8"),
+    "jpg"
+  );
 });
 
 test("Claude sessions pass photo attachments as prompt path references", async () => {
@@ -58,11 +62,10 @@ test("Claude sessions pass photo attachments as prompt path references", async (
   ]);
 
   assert.equal(runnerFactory.runs.length, 1);
-  assert.deepEqual(runnerFactory.runs[0].params.imagePaths, []);
+  assert.equal("imagePaths" in runnerFactory.runs[0].params, false);
   assert.match(runnerFactory.runs[0].params.message, /inspect/);
   assert.match(runnerFactory.runs[0].params.message, /<attachments>/);
-  assert.match(runnerFactory.runs[0].params.message, /kind=photo path=/);
-  assert.match(runnerFactory.runs[0].params.message, /msg12\.jpg/);
+  assert.match(runnerFactory.runs[0].params.message, /<attachment path=".*msg12\.jpg" kind="photo" \/>/);
 });
 
 test("session builds attachment prompts for path-based files", async () => {
@@ -87,11 +90,10 @@ test("session builds attachment prompts for path-based files", async () => {
   ]);
 
   assert.equal(runnerFactory.runs.length, 1);
-  assert.deepEqual(runnerFactory.runs[0].params.imagePaths, []);
+  assert.equal("imagePaths" in runnerFactory.runs[0].params, false);
   assert.match(runnerFactory.runs[0].params.message, /review this/);
   assert.match(runnerFactory.runs[0].params.message, /<attachments>/);
-  assert.match(runnerFactory.runs[0].params.message, /msg21\.pdf/);
-  assert.match(runnerFactory.runs[0].params.message, /kind=document path=/);
+  assert.match(runnerFactory.runs[0].params.message, /<attachment path=".*msg21\.pdf" kind="document" \/>/);
 });
 
 test("session rejects oversized attachments before starting Codex", async () => {

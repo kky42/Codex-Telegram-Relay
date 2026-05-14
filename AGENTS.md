@@ -57,6 +57,7 @@ HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890 npm start
 
 ## Codex Instruction Injection
 
+- Before changing any system prompt, appended system prompt, developer instruction, artifact/attachment contract, or user message prompt construction, discuss the proposed change with the user and get explicit permission.
 - For relay-specific response-shaping rules, prefer `developer_instructions`.
 - Experimental result in local `codex exec` runs:
   - `developer_instructions` is injected as an additional developer message for that turn and affects model behavior immediately.

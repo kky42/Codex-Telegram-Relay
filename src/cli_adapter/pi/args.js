@@ -1,5 +1,6 @@
 import {
   AUTO_DEFAULT,
+  AUTO_LEVEL_HIGH,
   AUTO_LEVEL_LOW,
   AUTO_LEVEL_MEDIUM,
   normalizeAutoMode
@@ -9,51 +10,58 @@ import {
   DEFAULT_REASONING_EFFORT
 } from "../../runtime-settings.js";
 
+const PI_SANDBOX_MODES = {
+  [AUTO_LEVEL_LOW]: "readonly",
+  [AUTO_LEVEL_MEDIUM]: "on",
+  [AUTO_LEVEL_HIGH]: "off"
+};
+
 /**
- * @typedef {object} ClaudeRunRequest
+ * @typedef {object} PiRunRequest
  * @property {string | null | undefined} [sessionId]
  * @property {string} message
  * @property {string} [autoMode]
  * @property {string} [model]
  * @property {string} [reasoningEffort]
  * @property {string | null | undefined} [developerInstructions]
+ * @property {boolean} [supportsSandboxFlag]
  */
 
 /**
- * @param {ClaudeRunRequest} request
+ * @param {PiRunRequest} request
  */
-export function buildClaudeArgs({
+export function buildPiArgs({
   sessionId,
   message,
   autoMode = AUTO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT,
-  developerInstructions = null
+  developerInstructions = null,
+  supportsSandboxFlag = false
 }) {
   const normalizedAutoMode = normalizeAutoMode(autoMode, "autoMode");
-  const modeArgs =
-    normalizedAutoMode === AUTO_LEVEL_LOW
-      ? ["--permission-mode", "dontAsk"]
-      : normalizedAutoMode === AUTO_LEVEL_MEDIUM
-        ? ["--permission-mode", "acceptEdits"]
-        : ["--dangerously-skip-permissions"];
+  const sandboxArgs = supportsSandboxFlag
+    ? ["--sandbox", PI_SANDBOX_MODES[normalizedAutoMode]]
+    : [];
   const modelArgs = model === DEFAULT_MODEL ? [] : ["--model", model];
   const reasoningArgs =
-    reasoningEffort === DEFAULT_REASONING_EFFORT ? [] : ["--effort", reasoningEffort];
+    reasoningEffort === DEFAULT_REASONING_EFFORT
+      ? []
+      : ["--thinking", reasoningEffort];
   const developerInstructionArgs = developerInstructions
     ? ["--append-system-prompt", developerInstructions]
     : [];
-  const resumeArgs = sessionId ? ["--resume", sessionId] : [];
+  const sessionArgs = sessionId ? ["--session", sessionId] : [];
 
   return [
     "-p",
-    "--output-format",
-    "stream-json",
-    ...modeArgs,
+    "--mode",
+    "json",
+    ...sandboxArgs,
     ...modelArgs,
     ...reasoningArgs,
     ...developerInstructionArgs,
-    ...resumeArgs,
+    ...sessionArgs,
     message
   ];
 }

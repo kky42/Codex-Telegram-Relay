@@ -2,7 +2,7 @@
 
 Run CLI coding agents from chat platforms.
 
-The current implementation ships CLI adapters for `codex` and `claude`, plus one chat
+The current implementation ships CLI adapters for `codex`, `claude`, and `pi`, plus one chat
 adapter (`telegram`). The internal layout is ready for additional CLI agents such as Pi
 and additional chat platforms such as Mattermost.
 
@@ -26,7 +26,7 @@ keep into `~/.anyagent/agents/<agent-id>/config.json`.
 
 - CLI adapters live in `src/cli_adapter/<agent>/`.
 - Chat adapters live in `src/chat_adapter/<platform>/`.
-- Current adapters: `src/cli_adapter/codex/`, `src/cli_adapter/claude/`, and `src/chat_adapter/telegram/`.
+- Current adapters: `src/cli_adapter/codex/`, `src/cli_adapter/claude/`, `src/cli_adapter/pi/`, and `src/chat_adapter/telegram/`.
 
 ## Config
 
@@ -59,7 +59,7 @@ Each agent lives in its own directory:
 
 Notes:
 
-- `profile.cli` can be `codex` or `claude`.
+- `profile.cli` can be `codex`, `claude`, or `pi`.
 - `profile.workdir` is optional. If omitted, the relay uses your home directory. It must already exist.
 - `profile.auto` defaults to `medium`.
 - `profile.model` and `profile.reasoningEffort` default to `default`, which means the relay does not pass a CLI-specific override.
@@ -110,18 +110,19 @@ Useful PM2 commands:
 - Startup discards pending Telegram updates so messages and slash commands sent while the relay was stopped are not processed after restart.
 - Each `(Telegram bot, chat)` pair has its own in-memory queue, `sessionId`, and usage state.
 - Supported Telegram attachments are `photo`, `document`, `video`, `audio`, `voice`, and `animation`.
-- `photo` attachments are passed to Codex natively with `--image`. Claude receives downloaded photo paths in the prompt, the same way non-image attachments are referenced.
-- Other supported attachments are downloaded to `~/.anyagent/cache/telegram/<bot-username>/c<base36-chat-id>/...` and passed to the agent by local file path in the prompt.
-- Captionless Codex photo-only turns send an empty prompt plus one or more `--image` flags. Claude photo-only turns send an attachment path block.
+- Supported attachments are downloaded to `~/.anyagent/cache/telegram/<bot-username>/c<base36-chat-id>/...` and passed to every agent by local file path in the prompt.
+- Attachment paths are rendered as `<attachments>` XML blocks with one `<attachment path="..." kind="..." />` entry per downloaded file, including photos.
 - Telegram media albums are grouped by `media_group_id` and submitted as one logical agent turn.
 - Attachments larger than 20 MB are rejected.
 - Codex fresh prompts use `codex exec --json --skip-git-repo-check`; continued prompts use `codex exec resume`.
 - Claude fresh prompts use `claude -p --output-format stream-json`; continued prompts use `claude -p --output-format stream-json --resume <session-id>`.
+- Pi fresh prompts use `pi -p --mode json`; continued prompts use `pi -p --mode json --session <session-id>`.
 - The relay maps `auto` to each CLI's permission model. Codex uses `read-only`, `workspace-write`, or dangerous bypass. Claude uses `dontAsk`, `acceptEdits`, or `--dangerously-skip-permissions`.
+- Pi uses `--sandbox readonly`, `--sandbox on`, or `--sandbox off` when the installed Pi extensions expose the `--sandbox` flag, such as `@kky42/pi-sandbox`. If the flag is not available, the relay starts Pi without sandbox arguments.
 - Fresh interactive sessions inject only a relay attachment contract using `<attachments>` XML blocks; Telegram-specific formatting is handled by the relay. Claude receives this contract through `--append-system-prompt`.
 - The relay keeps `sessionId` and the latest `context_length` in memory for the chat while the process is running.
-- Codex `context_length` is derived from the final `token_count.last_token_usage` event in the Codex rollout file under `~/.codex/sessions/...`. Claude `context_length` is derived from the streamed result usage.
-- Completed Codex `agent_message` items and Claude text response events become the visible final reply.
+- Codex `context_length` is derived from the final `token_count.last_token_usage` event in the Codex rollout file under `~/.codex/sessions/...`. Claude `context_length` is derived from the streamed result usage. Pi `context_length` is derived from the final assistant `usage.totalTokens` value in the JSON event stream or saved session file under `~/.pi/agent/sessions/...`.
+- Completed Codex `agent_message` items, Claude text response events, and Pi assistant `message_end` events become the visible final reply. Pi text deltas are not forwarded one by one.
 - Non-message items such as `reasoning`, `web_search`, and `command_execution` reuse one in-flight Telegram message that is edited as progress changes.
 - Telegram converts agent Markdown replies to Telegram-safe HTML, sends with `HTML` parse mode first, then falls back to `MarkdownV2` or plain text if parsing still fails.
 - Slash commands that change settings only affect the invoking chat session.

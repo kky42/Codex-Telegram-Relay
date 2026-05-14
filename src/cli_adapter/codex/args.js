@@ -11,12 +11,8 @@ import {
 
 /**
  * @typedef {object} CodexRunRequest
- * @property {string} workdir
  * @property {string | null | undefined} [sessionId]
  * @property {string} message
- * @property {string[]} [imagePaths]
- * @property {string | null | undefined} [outputLastMessagePath]
- * @property {boolean} [ephemeral]
  * @property {string} [autoMode]
  * @property {string} [model]
  * @property {string} [reasoningEffort]
@@ -31,12 +27,8 @@ function buildConfigOverrideArg(key, rawValue) {
  * @param {CodexRunRequest} request
  */
 export function buildCodexArgs({
-  workdir,
   sessionId,
   message,
-  imagePaths = [],
-  outputLastMessagePath = null,
-  ephemeral = false,
   autoMode = AUTO_DEFAULT,
   model = DEFAULT_MODEL,
   reasoningEffort = DEFAULT_REASONING_EFFORT,
@@ -61,17 +53,12 @@ export function buildCodexArgs({
 
   const baseArgs = [
     "exec",
-    "-C",
-    workdir,
     "--json",
     "--skip-git-repo-check",
     ...developerInstructionArgs,
-    ...(ephemeral ? ["--ephemeral"] : []),
-    ...(outputLastMessagePath ? ["--output-last-message", outputLastMessagePath] : []),
     ...modeArgs,
     ...modelArgs,
-    ...reasoningArgs,
-    ...imagePaths.flatMap((imagePath) => [`--image=${imagePath}`])
+    ...reasoningArgs
   ];
 
   if (sessionId) {

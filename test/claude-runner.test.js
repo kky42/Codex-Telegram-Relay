@@ -11,7 +11,6 @@ import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/ou
 
 test("buildClaudeArgs uses print stream-json for a fresh session", () => {
   assert.deepEqual(buildClaudeArgs({
-    workdir: "/tmp/project",
     message: "hello"
   }), [
     "-p",
@@ -25,7 +24,6 @@ test("buildClaudeArgs uses print stream-json for a fresh session", () => {
 
 test("buildClaudeArgs resumes an existing session", () => {
   assert.deepEqual(buildClaudeArgs({
-    workdir: "/tmp/project",
     sessionId: "9f4026da-cb03-4e1e-a75c-b3fa94f42156",
     message: "continue"
   }), [
@@ -42,7 +40,6 @@ test("buildClaudeArgs resumes an existing session", () => {
 
 test("buildClaudeArgs maps auto modes to Claude permission flags", () => {
   assert.deepEqual(buildClaudeArgs({
-    workdir: "/tmp/project",
     message: "hello",
     autoMode: "low"
   }), [
@@ -55,7 +52,6 @@ test("buildClaudeArgs maps auto modes to Claude permission flags", () => {
   ]);
 
   assert.deepEqual(buildClaudeArgs({
-    workdir: "/tmp/project",
     message: "hello",
     autoMode: "high"
   }), [
@@ -69,7 +65,6 @@ test("buildClaudeArgs maps auto modes to Claude permission flags", () => {
 
 test("buildClaudeArgs appends model, effort, and attachment contract prompt", () => {
   assert.deepEqual(buildClaudeArgs({
-    workdir: "/tmp/project",
     message: "hello",
     model: "sonnet",
     reasoningEffort: "high",

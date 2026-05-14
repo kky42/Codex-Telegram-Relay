@@ -72,7 +72,6 @@ export function attachmentDescriptorFromMessage(message) {
   if (bestPhoto) {
     return {
       kind: "photo",
-      mode: "native-image",
       telegramFileId: bestPhoto.file_id,
       telegramFileUniqueId: bestPhoto.file_unique_id ?? null,
       fileName: null,
@@ -91,7 +90,6 @@ export function attachmentDescriptorFromMessage(message) {
 
     return {
       kind,
-      mode: "path-reference",
       telegramFileId: payload.file_id,
       telegramFileUniqueId: payload.file_unique_id ?? null,
       fileName: typeof payload.file_name === "string" ? payload.file_name : null,

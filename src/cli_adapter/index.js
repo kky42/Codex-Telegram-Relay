@@ -5,8 +5,12 @@ import { buildCodexArgs } from "./codex/args.js";
 import { readContextLengthForSession } from "./codex/context-length.js";
 import { eventToActions as codexEventToActions } from "./codex/events.js";
 import { startCodexRun } from "./codex/runner.js";
+import { buildPiArgs } from "./pi/args.js";
+import { readContextLengthForSession as readPiContextLengthForSession } from "./pi/context-length.js";
+import { eventToActions as piEventToActions } from "./pi/events.js";
+import { startPiRun } from "./pi/runner.js";
 
-export const SUPPORTED_AGENT_CLIS = ["codex", "claude"];
+export const SUPPORTED_AGENT_CLIS = ["codex", "claude", "pi"];
 
 const CLI_ADAPTERS = {
   codex: {
@@ -15,8 +19,7 @@ const CLI_ADAPTERS = {
     buildArgs: buildCodexArgs,
     eventToActions: codexEventToActions,
     startRun: startCodexRun,
-    resolveContextLength: readContextLengthForSession,
-    supportsNativeImages: true
+    resolveContextLength: readContextLengthForSession
   },
   claude: {
     id: "claude",
@@ -24,8 +27,15 @@ const CLI_ADAPTERS = {
     buildArgs: buildClaudeArgs,
     eventToActions: claudeEventToActions,
     startRun: startClaudeRun,
-    resolveContextLength: async () => null,
-    supportsNativeImages: false
+    resolveContextLength: async () => null
+  },
+  pi: {
+    id: "pi",
+    displayName: "Pi",
+    buildArgs: buildPiArgs,
+    eventToActions: piEventToActions,
+    startRun: startPiRun,
+    resolveContextLength: readPiContextLengthForSession
   }
 };
 

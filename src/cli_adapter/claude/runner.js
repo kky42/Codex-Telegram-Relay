@@ -10,9 +10,6 @@ export function startClaudeRun({
   workdir,
   sessionId,
   message,
-  imagePaths = [],
-  outputLastMessagePath = null,
-  ephemeral = false,
   autoMode,
   model,
   reasoningEffort,
@@ -22,12 +19,8 @@ export function startClaudeRun({
   onStdErr = () => {}
 }) {
   const args = buildClaudeArgs({
-    workdir,
     sessionId,
     message,
-    imagePaths,
-    outputLastMessagePath,
-    ephemeral,
     autoMode,
     model,
     reasoningEffort,

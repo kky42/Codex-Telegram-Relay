@@ -10,9 +10,6 @@ export function startCodexRun({
   workdir,
   sessionId,
   message,
-  imagePaths = [],
-  outputLastMessagePath = null,
-  ephemeral = false,
   autoMode,
   model,
   reasoningEffort,
@@ -22,12 +19,8 @@ export function startCodexRun({
   onStdErr = () => {}
 }) {
   const args = buildCodexArgs({
-    workdir,
     sessionId,
     message,
-    imagePaths,
-    outputLastMessagePath,
-    ephemeral,
     autoMode,
     model,
     reasoningEffort,
@@ -37,6 +30,7 @@ export function startCodexRun({
   return startCliJsonRun({
     command: "codex",
     args,
+    cwd: workdir,
     displayName: "codex",
     parseEventLine: parseJsonlLine,
     isTerminalEvent: isCodexTerminalEvent,

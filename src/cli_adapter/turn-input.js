@@ -4,17 +4,27 @@
  * @property {any[]} attachments
  */
 
+function escapeXmlAttribute(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function buildAttachmentPrompt(promptText, attachments) {
   const normalizedPrompt = String(promptText ?? "").trim();
-  const pathReferences = attachments.filter((attachment) => attachment.mode === "path-reference");
+  const localAttachments = attachments.filter((attachment) => attachment?.localPath);
 
-  if (pathReferences.length === 0) {
+  if (localAttachments.length === 0) {
     return normalizedPrompt;
   }
 
   const attachmentLines = ["<attachments>"];
-  for (const [index, attachment] of pathReferences.entries()) {
-    attachmentLines.push(`${index + 1}. kind=${attachment.kind} path=${attachment.localPath}`);
+  for (const attachment of localAttachments) {
+    attachmentLines.push(
+      `<attachment path="${escapeXmlAttribute(attachment.localPath)}" kind="${escapeXmlAttribute(attachment.kind)}" />`
+    );
   }
   attachmentLines.push("</attachments>");
 

@@ -584,32 +584,20 @@ export class ChatSession {
     let emittedError = false;
     let currentSessionId = this.sessionId;
     let completedTurn = false;
-    const imagePaths = this.cliAdapter.supportsNativeImages
-      ? nextTurn.attachments
-        .filter((attachment) => attachment.mode === "native-image")
-        .map((attachment) => attachment.localPath)
-      : [];
-    const messageTurn = this.cliAdapter.supportsNativeImages
-      ? nextTurn
-      : {
-        ...nextTurn,
-        attachments: nextTurn.attachments.map((attachment) =>
-          attachment.mode === "native-image"
-            ? { ...attachment, mode: "path-reference" }
-            : attachment
-        )
-      };
-    const message = buildTurnInputMessage(messageTurn);
-    const debugArgs = this.cliAdapter.buildArgs({
-      workdir: this.workdir,
+    const message = buildTurnInputMessage(nextTurn);
+    const buildArgParams = {
       sessionId: this.sessionId,
       message,
-      imagePaths,
       autoMode: this.auto,
       model: this.model,
       reasoningEffort: this.reasoningEffort,
       developerInstructions: ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS
-    });
+    };
+    const runParams = {
+      workdir: this.workdir,
+      ...buildArgParams
+    };
+    const debugArgs = this.cliAdapter.buildArgs(buildArgParams);
     const redactedArgs = debugArgs.slice();
     if (redactedArgs.length > 0) {
       redactedArgs[redactedArgs.length - 1] = `<prompt:${message.length}>`;
@@ -619,7 +607,6 @@ export class ChatSession {
         sessionId: this.sessionId,
         attachments: nextTurn.attachments.map((attachment) => ({
           kind: attachment.kind,
-          mode: attachment.mode,
           localPath: attachment.localPath
         })),
         args: redactedArgs
@@ -627,14 +614,7 @@ export class ChatSession {
     );
 
     const run = this.createAgentRun({
-      workdir: this.workdir,
-      sessionId: this.sessionId,
-      message,
-      imagePaths,
-      autoMode: this.auto,
-      model: this.model,
-      reasoningEffort: this.reasoningEffort,
-      developerInstructions: ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS,
+      ...runParams,
       onEvent: async (event) => {
         const actions = this.cliAdapter.eventToActions(event);
         for (const action of actions) {

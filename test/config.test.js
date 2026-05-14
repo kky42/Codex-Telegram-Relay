@@ -85,6 +85,33 @@ test("loadConfig accepts Claude agent profiles", async () => {
   assert.equal(config.telegramBots[0].agent.cli, "claude");
 });
 
+test("loadConfig accepts Pi agent profiles", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-config-"));
+  const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-workdir-"));
+
+  await writeAgentConfig(tempDir, "primary", {
+    profile: {
+      cli: "pi",
+      workdir
+    },
+    bindings: {
+      telegram: {
+        bots: [
+          {
+            username: "RelayBot",
+            token: "token-1"
+          }
+        ]
+      }
+    }
+  });
+
+  const config = await loadConfig(tempDir);
+  assert.equal(config.agents[0].cli, "pi");
+  assert.equal(config.agents[0].workdir, workdir);
+  assert.equal(config.telegramBots[0].agent.cli, "pi");
+});
+
 test("loadConfig defaults profile values", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-config-"));
   const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-workdir-"));
@@ -157,7 +184,7 @@ test("loadConfig rejects unsupported agent cli values", async () => {
     }
   });
 
-  await assert.rejects(() => loadConfig(tempDir), /profile\.cli must be one of: codex, claude/);
+  await assert.rejects(() => loadConfig(tempDir), /profile\.cli must be one of: codex, claude, pi/);
 });
 
 test("loadConfig rejects duplicate Telegram bot usernames", async () => {
