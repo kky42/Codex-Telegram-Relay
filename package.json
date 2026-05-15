@@ -27,6 +27,7 @@
   "scripts": {
     "start": "node ./bin/anyagent.js",
     "test": "node --test",
+    "smoke:real-agents": "node ./scripts/smoke-real-agents.js",
     "verify:context-length": "node ./scripts/verify-context-length.js"
   },
   "keywords": [

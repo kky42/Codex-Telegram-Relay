@@ -1,0 +1,78 @@
+name: Real Agent Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: "Agents to smoke test: all, codex, claude, pi, or comma-separated values"
+        required: true
+        default: all
+      test_resume:
+        description: "Also run a second turn using each emitted session id"
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  smoke:
+    name: Real agents (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    env:
+      REAL_AGENT_SMOKE_TARGETS: ${{ inputs.agents }}
+      REAL_AGENT_SMOKE_RESUME: ${{ inputs.test_resume }}
+
+      CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+      CODEX_PROVIDER_NAME: ${{ vars.CODEX_PROVIDER_NAME }}
+      CODEX_PROVIDER_WIRE_API: ${{ vars.CODEX_PROVIDER_WIRE_API }}
+      CODEX_PROVIDER_ENV_KEY: ${{ vars.CODEX_PROVIDER_ENV_KEY }}
+      CODEX_PROVIDER_BASE_URL: ${{ secrets.CODEX_PROVIDER_BASE_URL }}
+      CODEX_PROVIDER_API_KEY: ${{ secrets.CODEX_PROVIDER_API_KEY }}
+
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ vars.CLAUDE_CODE_EFFORT_LEVEL }}
+      CLAUDE_BASE_URL: ${{ secrets.CLAUDE_BASE_URL }}
+      CLAUDE_AUTH_TOKEN: ${{ secrets.CLAUDE_AUTH_TOKEN }}
+      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      PI_PROVIDER: ${{ vars.PI_PROVIDER }}
+      PI_MODEL: ${{ vars.PI_MODEL }}
+      PI_PROVIDER_API: ${{ vars.PI_PROVIDER_API }}
+      PI_PROVIDER_BASE_URL: ${{ secrets.PI_PROVIDER_BASE_URL }}
+      PI_PROVIDER_API_KEY: ${{ secrets.PI_PROVIDER_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install real agent CLIs
+        run: npm install -g @openai/codex @anthropic-ai/claude-code @earendil-works/pi-coding-agent
+
+      - name: Show CLI versions
+        run: |
+          codex --version
+          claude --version
+          pi --version
+
+      - name: Run real agent smoke tests
+        run: npm run smoke:real-agents
