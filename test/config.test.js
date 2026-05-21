@@ -4,7 +4,12 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { loadConfig, findChatBindingConfig, findTelegramBotConfig } from "../src/config.js";
+import {
+  loadConfig,
+  findChatBindingConfig,
+  findMattermostBotConfig,
+  findTelegramBotConfig
+} from "../src/config.js";
 
 async function writeAgentConfig(rootDir, agentId, config) {
   const agentDir = path.join(rootDir, agentId);
@@ -95,6 +100,59 @@ test("loadConfig accepts telegram group history settings", async () => {
 
   const config = await loadConfig(tempDir);
   assert.deepEqual(config.telegramBots[0].groupHistory, { hours: 6, messages: 50 });
+});
+
+test("loadConfig loads mattermost bindings", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-config-"));
+  const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-workdir-"));
+
+  await writeAgentConfig(tempDir, "primary", {
+    profile: {
+      cli: "codex",
+      workdir
+    },
+    bindings: {
+      mattermost: {
+        allowedUsernames: ["@OwnerUser"],
+        groupHistory: {
+          hours: 12,
+          messages: 75
+        },
+        bots: [
+          {
+            serverUrl: "http://localhost:8065/",
+            username: "@RelayBot",
+            token: "token-1",
+            allowedUsernames: ["@Allowed.User"]
+          }
+        ]
+      }
+    }
+  });
+
+  const config = await loadConfig(tempDir);
+  assert.equal(config.telegramBots.length, 0);
+  assert.equal(config.mattermostBots.length, 1);
+  assert.equal(config.mattermostBots[0].platform, "mattermost");
+  assert.equal(config.mattermostBots[0].serverUrl, "http://localhost:8065");
+  assert.equal(config.mattermostBots[0].username, "relaybot");
+  assert.equal(config.mattermostBots[0].bindingId, "localhost:8065:relaybot");
+  assert.deepEqual(config.mattermostBots[0].allowedUsernames, ["owneruser", "allowed.user"]);
+  assert.deepEqual(config.mattermostBots[0].groupHistory, { hours: 12, messages: 75 });
+  assert.equal(config.mattermostBots[0].agent.workdir, workdir);
+  assert.equal(config.chatBindings[0], config.mattermostBots[0]);
+
+  const botConfig = findMattermostBotConfig(config, {
+    agentId: "primary",
+    bindingId: "localhost:8065:relaybot"
+  });
+  assert.equal(botConfig?.username, "relaybot");
+  const bindingConfig = findChatBindingConfig(config, {
+    platform: "mattermost",
+    agentId: "primary",
+    bindingId: "localhost:8065:relaybot"
+  });
+  assert.equal(bindingConfig?.bindingId, "localhost:8065:relaybot");
 });
 
 test("loadConfig accepts Claude agent profiles", async () => {
@@ -281,4 +339,44 @@ test("loadConfig rejects duplicate Telegram bot usernames", async () => {
   });
 
   await assert.rejects(() => loadConfig(tempDir), /Duplicate Telegram bot username: relaybot/);
+});
+
+test("loadConfig rejects duplicate Mattermost binding ids", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-config-"));
+  const workdirA = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-workdir-a-"));
+  const workdirB = await fs.mkdtemp(path.join(os.tmpdir(), "anyagent-workdir-b-"));
+
+  await writeAgentConfig(tempDir, "primary", {
+    profile: { cli: "codex", workdir: workdirA },
+    bindings: {
+      mattermost: {
+        bots: [
+          {
+            serverUrl: "http://localhost:8065",
+            username: "RelayBot",
+            token: "token-1"
+          }
+        ]
+      }
+    }
+  });
+  await writeAgentConfig(tempDir, "secondary", {
+    profile: { cli: "codex", workdir: workdirB },
+    bindings: {
+      mattermost: {
+        bots: [
+          {
+            serverUrl: "http://localhost:8065/",
+            username: "@RelayBot",
+            token: "token-2"
+          }
+        ]
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => loadConfig(tempDir),
+    /Duplicate chat binding: mattermost:localhost:8065:relaybot/
+  );
 });

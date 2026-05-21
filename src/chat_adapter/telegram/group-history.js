@@ -1,9 +1,12 @@
 import { attachmentDescriptorFromMessage } from "./attachments.js";
+import {
+  DEFAULT_GROUP_HISTORY_HOURS,
+  DEFAULT_GROUP_HISTORY_MESSAGES
+} from "../common/group-history-defaults.js";
 import { normalizeTelegramUsername, truncateText } from "../../utils.js";
 import { parseCommand } from "./command-router.js";
 
-export const DEFAULT_GROUP_HISTORY_HOURS = 24;
-export const DEFAULT_GROUP_HISTORY_MESSAGES = 1000;
+export { DEFAULT_GROUP_HISTORY_HOURS, DEFAULT_GROUP_HISTORY_MESSAGES };
 
 const TEXT_PREVIEW_LIMIT = 4000;
 

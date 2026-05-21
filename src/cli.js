@@ -1,6 +1,7 @@
 import process from "node:process";
 
-import { BotRuntime } from "./chat_adapter/telegram/bot-runtime.js";
+import { BotRuntime as MattermostBotRuntime } from "./chat_adapter/mattermost/bot-runtime.js";
+import { BotRuntime as TelegramBotRuntime } from "./chat_adapter/telegram/bot-runtime.js";
 import { ConfigStore } from "./config-store.js";
 import { addAgentConfig } from "./config-scaffold.js";
 import { loadConfig } from "./config.js";
@@ -66,19 +67,28 @@ function parseArgs(argv) {
 async function runServer(configPath) {
   const config = await loadConfig(configPath);
   const configStore = new ConfigStore(config.configPath);
-  const telegramBindings = config.chatBindings.filter((binding) => binding.platform === "telegram");
 
-  if (telegramBindings.length === 0) {
-    throw new Error(`No Telegram bots configured under ${config.configPath}.`);
+  if (config.chatBindings.length === 0) {
+    throw new Error(`No chat bots configured under ${config.configPath}.`);
   }
 
-  const runtimes = telegramBindings.map(
-    (botConfig) =>
-      new BotRuntime({
+  const runtimes = config.chatBindings.map((botConfig) => {
+    if (botConfig.platform === "telegram") {
+      return new TelegramBotRuntime({
         botConfig,
         configStore
-      })
-  );
+      });
+    }
+    if (botConfig.platform === "mattermost") {
+      return new MattermostBotRuntime({
+        botConfig,
+        configStore,
+        groupHistoryHours: botConfig.groupHistory?.hours,
+        groupHistoryMessages: botConfig.groupHistory?.messages
+      });
+    }
+    throw new Error(`Unsupported chat binding platform: ${botConfig.platform}`);
+  });
 
   const shutdown = async (signal) => {
     process.stderr.write(`Shutting down on ${signal}\n`);
@@ -101,12 +111,12 @@ async function runServer(configPath) {
   }
 
   process.stderr.write(
-    `Running ${runtimes.length} Telegram bot${runtimes.length === 1 ? "" : "s"} using ${config.configPath}\n`
+    `Running ${runtimes.length} chat bot${runtimes.length === 1 ? "" : "s"} using ${config.configPath}\n`
   );
 
   await Promise.all(
     runtimes.map((runtime) =>
-      runtime.pollPromise?.catch((error) => {
+      (runtime.pollPromise ?? runtime.connectPromise)?.catch((error) => {
         throw new Error(`Bot runtime failed: ${toErrorMessage(error)}`);
       })
     )
@@ -121,7 +131,7 @@ async function addAgent(args) {
   });
 
   process.stdout.write(`Created agent "${result.agentId}" at ${result.configFilePath}\n`);
-  process.stdout.write("Edit the Telegram username, token, and allowed usernames before running anyagent.\n");
+  process.stdout.write("Add the chat bot entry you want to use, then fill in usernames, tokens, and allowed usernames before running anyagent.\n");
 }
 
 export async function main(argv = process.argv.slice(2)) {

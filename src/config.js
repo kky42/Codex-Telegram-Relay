@@ -16,7 +16,7 @@ import {
 import {
   DEFAULT_GROUP_HISTORY_HOURS,
   DEFAULT_GROUP_HISTORY_MESSAGES
-} from "./chat_adapter/telegram/group-history.js";
+} from "./chat_adapter/common/group-history-defaults.js";
 
 const SUPPORTED_AGENT_CLI_SET = new Set(SUPPORTED_AGENT_CLIS);
 
@@ -53,6 +53,42 @@ function normalizeTelegramBotUsername(value, fieldPath) {
     throw new Error(`${fieldPath} must contain only letters, numbers, or "_"`);
   }
   return username;
+}
+
+function normalizeMattermostServerUrl(value, fieldPath) {
+  const rawUrl = String(value ?? "").trim().replace(/\/+$/, "");
+  if (!rawUrl) {
+    throw new Error(`${fieldPath} must be a non-empty URL`);
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error();
+    }
+    return rawUrl;
+  } catch {
+    throw new Error(`${fieldPath} must be an http or https URL`);
+  }
+}
+
+function normalizeMattermostUsername(value, fieldPath) {
+  const username = String(value ?? "").trim().replace(/^@+/, "").toLowerCase();
+  if (!username) {
+    throw new Error(`${fieldPath} must be a non-empty Mattermost username`);
+  }
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    throw new Error(`${fieldPath} must contain only letters, numbers, ".", "_" or "-"`);
+  }
+  return username;
+}
+
+function normalizeMattermostBindingId({ bindingId, serverUrl, username }) {
+  const normalizedBindingId = String(bindingId ?? "").trim();
+  if (normalizedBindingId) {
+    return normalizedBindingId;
+  }
+  const host = new URL(serverUrl).host.toLowerCase();
+  return `${host}:${username}`;
 }
 
 function normalizePositiveInteger(value, fieldPath, defaultValue) {
@@ -227,8 +263,10 @@ async function normalizeAgentConfig({ agentId, filePath }) {
   const bindings = rawConfig.bindings ?? {};
   assertObject(bindings, `${filePath}.bindings`);
   const telegram = bindings.telegram ?? null;
+  const mattermost = bindings.mattermost ?? null;
   const chatBindings = [];
   const telegramBots = [];
+  const mattermostBots = [];
 
   if (telegram !== null) {
     assertObject(telegram, `${filePath}.bindings.telegram`);
@@ -274,10 +312,62 @@ async function normalizeAgentConfig({ agentId, filePath }) {
     }
   }
 
+  if (mattermost !== null) {
+    assertObject(mattermost, `${filePath}.bindings.mattermost`);
+    const defaultAllowedUsernames = normalizeAllowedUsernames(
+      mattermost.allowedUsernames,
+      `${filePath}.bindings.mattermost.allowedUsernames`
+    );
+    const bots = mattermost.bots ?? [];
+    if (!Array.isArray(bots)) {
+      throw new Error(`${filePath}.bindings.mattermost.bots must be an array`);
+    }
+
+    for (const [index, bot] of bots.entries()) {
+      const prefix = `${filePath}.bindings.mattermost.bots[${index}]`;
+      assertObject(bot, prefix);
+      const serverUrl = normalizeMattermostServerUrl(bot.serverUrl, `${prefix}.serverUrl`);
+      const username = normalizeMattermostUsername(bot.username, `${prefix}.username`);
+      if (typeof bot.token !== "string" || !bot.token.trim()) {
+        throw new Error(`${prefix}.token must be a non-empty string`);
+      }
+      const allowedUsernames = normalizeAllowedUsernames(
+        bot.allowedUsernames,
+        `${prefix}.allowedUsernames`
+      );
+      const groupHistory = normalizeGroupHistory(
+        bot.groupHistory ?? mattermost.groupHistory,
+        bot.groupHistory === undefined
+          ? `${filePath}.bindings.mattermost.groupHistory`
+          : `${prefix}.groupHistory`
+      );
+      const bindingId = normalizeMattermostBindingId({
+        bindingId: bot.bindingId,
+        serverUrl,
+        username
+      });
+
+      const mattermostBot = {
+        platform: "mattermost",
+        bindingId,
+        serverUrl,
+        username,
+        token: bot.token.trim(),
+        allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])],
+        groupHistory,
+        agent: structuredClone(agent),
+        configPath: filePath
+      };
+      mattermostBots.push(mattermostBot);
+      chatBindings.push(mattermostBot);
+    }
+  }
+
   return {
     agent,
     chatBindings,
-    telegramBots
+    telegramBots,
+    mattermostBots
   };
 }
 
@@ -325,11 +415,20 @@ export function findTelegramBotConfig(config, { agentId, username }) {
   });
 }
 
+export function findMattermostBotConfig(config, { agentId, bindingId }) {
+  return findChatBindingConfig(config, {
+    platform: "mattermost",
+    agentId,
+    bindingId
+  });
+}
+
 export async function loadConfig(configPath = DEFAULT_CONFIG_PATH) {
   const configFiles = await findAgentConfigFiles(configPath);
   const agents = [];
   const chatBindings = [];
   const telegramBots = [];
+  const mattermostBots = [];
   const agentIds = new Set();
   const chatBindingKeys = new Set();
 
@@ -354,6 +453,8 @@ export async function loadConfig(configPath = DEFAULT_CONFIG_PATH) {
       chatBindings.push(binding);
       if (binding.platform === "telegram") {
         telegramBots.push(binding);
+      } else if (binding.platform === "mattermost") {
+        mattermostBots.push(binding);
       }
     }
   }
@@ -362,6 +463,7 @@ export async function loadConfig(configPath = DEFAULT_CONFIG_PATH) {
     configPath: path.resolve(configPath),
     agents,
     chatBindings,
-    telegramBots
+    telegramBots,
+    mattermostBots
   };
 }

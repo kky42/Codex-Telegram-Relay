@@ -33,13 +33,16 @@ test("buildCanonicalAgentConfig includes required profile defaults", () => {
             hours: 24,
             messages: 1000
           },
-          bots: [
-            {
-              username: "your_bot_username",
-              token: "YOUR_TELEGRAM_BOT_TOKEN"
-            }
-          ]
-        }
+          bots: []
+        },
+        mattermost: {
+          allowedUsernames: ["your-mattermost-username"],
+          groupHistory: {
+            hours: 24,
+            messages: 1000
+          },
+          bots: []
+        },
       }
     }
   );
@@ -67,7 +70,8 @@ test("addAgentConfig creates an agent directory with canonical config", async ()
   assert.equal(config.profile.auto, "medium");
   assert.equal(config.profile.model, "default");
   assert.equal(config.profile.reasoningEffort, "default");
-  assert.equal(config.bindings.telegram.bots[0].token, "YOUR_TELEGRAM_BOT_TOKEN");
+  assert.deepEqual(config.bindings.telegram.bots, []);
+  assert.deepEqual(config.bindings.mattermost.bots, []);
 });
 
 test("addAgentConfig refuses duplicate agent directories", async () => {

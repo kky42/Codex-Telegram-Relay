@@ -17,7 +17,7 @@ import {
 import {
   DEFAULT_GROUP_HISTORY_HOURS,
   DEFAULT_GROUP_HISTORY_MESSAGES
-} from "./chat_adapter/telegram/group-history.js";
+} from "./chat_adapter/common/group-history-defaults.js";
 
 const SUPPORTED_AGENT_CLI_SET = new Set(SUPPORTED_AGENT_CLIS);
 
@@ -57,12 +57,15 @@ export function buildCanonicalAgentConfig({ cli, workdir = os.homedir() }) {
           hours: DEFAULT_GROUP_HISTORY_HOURS,
           messages: DEFAULT_GROUP_HISTORY_MESSAGES
         },
-        bots: [
-          {
-            username: "your_bot_username",
-            token: "YOUR_TELEGRAM_BOT_TOKEN"
-          }
-        ]
+        bots: []
+      },
+      mattermost: {
+        allowedUsernames: ["your-mattermost-username"],
+        groupHistory: {
+          hours: DEFAULT_GROUP_HISTORY_HOURS,
+          messages: DEFAULT_GROUP_HISTORY_MESSAGES
+        },
+        bots: []
       }
     }
   };
