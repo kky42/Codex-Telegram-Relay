@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { buildCodexArgs } from "../src/cli_adapter/codex/args.js";
 import { startCodexRun } from "../src/cli_adapter/codex/runner.js";
-import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/output-instructions.js";
+import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/common/output-instructions.js";
 import { createFakeCliCommand } from "./support/fakes.js";
 
 test("buildCodexArgs uses exec for a fresh session", () => {

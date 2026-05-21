@@ -4,9 +4,9 @@ import path from "node:path";
 import {
   OUTBOUND_ATTACHMENT_SIZE_LIMIT_BYTES,
   outboundAttachmentLimitText
-} from "./attachments.js";
-import { splitPlainText } from "../../utils.js";
-import { parseOutputSegments } from "../output-attachments.js";
+} from "../common/attachments.js";
+import { splitPlainText, toErrorMessage } from "../../utils.js";
+import { parseOutputSegments } from "../common/output-attachments.js";
 import { renderMarkdownToTelegramHtml } from "./markdown-renderer.js";
 import { escapeTelegramMarkdown } from "./render.js";
 import { TelegramApiError } from "./telegram-api.js";
@@ -118,11 +118,13 @@ function outboundMessageTarget(replyTarget) {
 }
 
 export class MessageRenderer {
-  constructor({ botApi, chatId }) {
+  constructor({ botApi, chatId, logger = () => {} }) {
     this.botApi = botApi;
     this.chatId = chatId;
+    this.logger = logger;
     this.progressMessageId = null;
     this.lastRenderedProgressText = null;
+    this.typingTimer = null;
   }
 
   resetTransientState() {
@@ -390,5 +392,35 @@ export class MessageRenderer {
     }
 
     await this.sendSplitText(rawText, options);
+  }
+
+  startTyping(replyTarget = null) {
+    if (this.typingTimer) {
+      return;
+    }
+
+    const tick = async () => {
+      try {
+        await this.botApi.sendChatAction({
+          chatId: this.chatId,
+          action: "typing",
+          ...outboundMessageTarget(replyTarget)
+        });
+      } catch (error) {
+        this.logger(`typing indicator failed: ${toErrorMessage(error)}`);
+      }
+    };
+
+    void tick();
+    this.typingTimer = setInterval(() => {
+      void tick();
+    }, 4000);
+  }
+
+  stopTyping() {
+    if (this.typingTimer) {
+      clearInterval(this.typingTimer);
+      this.typingTimer = null;
+    }
   }
 }

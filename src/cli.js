@@ -66,12 +66,13 @@ function parseArgs(argv) {
 async function runServer(configPath) {
   const config = await loadConfig(configPath);
   const configStore = new ConfigStore(config.configPath);
+  const telegramBindings = config.chatBindings.filter((binding) => binding.platform === "telegram");
 
-  if (config.telegramBots.length === 0) {
+  if (telegramBindings.length === 0) {
     throw new Error(`No Telegram bots configured under ${config.configPath}.`);
   }
 
-  const runtimes = config.telegramBots.map(
+  const runtimes = telegramBindings.map(
     (botConfig) =>
       new BotRuntime({
         botConfig,

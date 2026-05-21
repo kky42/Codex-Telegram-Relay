@@ -10,23 +10,13 @@ import {
   isBotAddressed
 } from "./group-history.js";
 import { MediaGroupBuffer } from "./media-group-buffer.js";
-import { NOOP_CONFIG_STORE } from "./session-persistence.js";
+import { NOOP_CONFIG_STORE } from "../common/session-persistence.js";
 import { TelegramApiError, TelegramBotApi } from "./telegram-api.js";
+import { CHAT_COMMANDS, ROUTED_COMMAND_NAMES } from "../common/render.js";
 
-export const TELEGRAM_COMMANDS = [
-  { command: "status", description: "Show current agent status" },
-  { command: "cli", description: "Show or change the agent CLI for this chat" },
-  { command: "workdir", description: "Show or change the bot workdir" },
-  { command: "auto", description: "Set agent automation level for this chat" },
-  { command: "model", description: "Set model for future runs" },
-  { command: "reasoning", description: "Set reasoning effort for future runs" },
-  { command: "clear_cache", description: "Clear cached attachments for this chat" },
-  { command: "abort", description: "Abort current run and clear queued messages" },
-  { command: "new", description: "Start a fresh session and clear context" },
-  { command: "reset", description: "Reload config defaults for this chat" }
-];
+export const TELEGRAM_COMMANDS = CHAT_COMMANDS;
 
-const ROUTED_GROUP_COMMANDS = new Set(TELEGRAM_COMMANDS.map((command) => command.command));
+const ROUTED_GROUP_COMMANDS = ROUTED_COMMAND_NAMES;
 
 function unauthorizedMessage(user) {
   const username = normalizeTelegramUsername(user?.username);

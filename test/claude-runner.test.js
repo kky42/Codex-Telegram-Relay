@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 
 import { buildClaudeArgs } from "../src/cli_adapter/claude/args.js";
 import { startClaudeRun } from "../src/cli_adapter/claude/runner.js";
-import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/output-instructions.js";
+import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/common/output-instructions.js";
 import { createFakeCliCommand } from "./support/fakes.js";
 
 test("buildClaudeArgs uses print stream-json for a fresh session", () => {

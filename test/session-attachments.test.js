@@ -3,7 +3,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCacheScope } from "../src/chat_adapter/cache-scope.js";
+import { buildCacheScope } from "../src/chat_adapter/common/cache-scope.js";
 import { createSession } from "./support/builders.js";
 
 function escapeRegExp(value) {

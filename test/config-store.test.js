@@ -51,4 +51,14 @@ test("ConfigStore reloads a telegram bot binding from config.json", async () => 
   assert.equal(botConfig.agent.id, "primary");
   assert.equal(botConfig.agent.workdir, workdir);
   assert.deepEqual(botConfig.allowedUsernames, ["owneruser", "alloweduser"]);
+
+  const bindingConfig = await configStore.loadChatBindingConfig({
+    platform: "telegram",
+    agentId: "primary",
+    bindingId: "@RelayBot"
+  });
+
+  assert.equal(bindingConfig.platform, "telegram");
+  assert.equal(bindingConfig.bindingId, "relaybot");
+  assert.equal(bindingConfig.agent.id, "primary");
 });

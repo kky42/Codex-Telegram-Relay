@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { loadConfig, findTelegramBotConfig } from "../src/config.js";
+import { loadConfig, findChatBindingConfig, findTelegramBotConfig } from "../src/config.js";
 
 async function writeAgentConfig(rootDir, agentId, config) {
   const agentDir = path.join(rootDir, agentId);
@@ -50,13 +50,22 @@ test("loadConfig loads agent profiles and telegram bindings", async () => {
 
   assert.equal(config.telegramBots.length, 1);
   assert.equal(config.telegramBots[0].username, "relaybot");
+  assert.equal(config.telegramBots[0].bindingId, "relaybot");
   assert.deepEqual(config.telegramBots[0].allowedUsernames, ["owneruser", "alloweduser"]);
   assert.deepEqual(config.telegramBots[0].groupHistory, { hours: 24, messages: 1000 });
   assert.equal(config.telegramBots[0].agent.id, "primary");
   assert.equal(config.telegramBots[0].agent.workdir, workdir);
+  assert.equal(config.chatBindings.length, 1);
+  assert.equal(config.chatBindings[0], config.telegramBots[0]);
 
   const botConfig = findTelegramBotConfig(config, { agentId: "primary", username: "@RelayBot" });
   assert.equal(botConfig?.username, "relaybot");
+  const bindingConfig = findChatBindingConfig(config, {
+    platform: "telegram",
+    agentId: "primary",
+    bindingId: "@RelayBot"
+  });
+  assert.equal(bindingConfig?.bindingId, "relaybot");
 });
 
 test("loadConfig accepts telegram group history settings", async () => {

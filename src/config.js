@@ -227,6 +227,7 @@ async function normalizeAgentConfig({ agentId, filePath }) {
   const bindings = rawConfig.bindings ?? {};
   assertObject(bindings, `${filePath}.bindings`);
   const telegram = bindings.telegram ?? null;
+  const chatBindings = [];
   const telegramBots = [];
 
   if (telegram !== null) {
@@ -258,39 +259,79 @@ async function normalizeAgentConfig({ agentId, filePath }) {
           : `${prefix}.groupHistory`
       );
 
-      telegramBots.push({
+      const telegramBot = {
         platform: "telegram",
+        bindingId: username,
         username,
         token: bot.token.trim(),
         allowedUsernames: [...new Set([...defaultAllowedUsernames, ...allowedUsernames])],
         groupHistory,
         agent: structuredClone(agent),
         configPath: filePath
-      });
+      };
+      telegramBots.push(telegramBot);
+      chatBindings.push(telegramBot);
     }
   }
 
   return {
     agent,
+    chatBindings,
     telegramBots
   };
 }
 
-export function findTelegramBotConfig(config, { agentId, username }) {
-  const normalizedUsername = normalizeTelegramBotUsername(username, "telegram bot username");
+function normalizeChatBindingLookup({ platform, bindingId }) {
+  const normalizedPlatform = String(platform ?? "").trim().toLowerCase();
+  if (!normalizedPlatform) {
+    throw new Error("chat binding platform must be a non-empty string");
+  }
+
+  if (normalizedPlatform === "telegram") {
+    return {
+      platform: normalizedPlatform,
+      bindingId: normalizeTelegramBotUsername(bindingId, "telegram bot username")
+    };
+  }
+
+  const normalizedBindingId = String(bindingId ?? "").trim();
+  if (!normalizedBindingId) {
+    throw new Error("chat binding id must be a non-empty string");
+  }
+
+  return {
+    platform: normalizedPlatform,
+    bindingId: normalizedBindingId
+  };
+}
+
+export function findChatBindingConfig(config, { platform, agentId, bindingId }) {
+  const lookup = normalizeChatBindingLookup({ platform, bindingId });
   return (
-    config.telegramBots.find(
-      (bot) => bot.agent.id === agentId && bot.username === normalizedUsername
+    config.chatBindings.find(
+      (binding) =>
+        binding.platform === lookup.platform &&
+        binding.agent.id === agentId &&
+        binding.bindingId === lookup.bindingId
     ) ?? null
   );
+}
+
+export function findTelegramBotConfig(config, { agentId, username }) {
+  return findChatBindingConfig(config, {
+    platform: "telegram",
+    agentId,
+    bindingId: username
+  });
 }
 
 export async function loadConfig(configPath = DEFAULT_CONFIG_PATH) {
   const configFiles = await findAgentConfigFiles(configPath);
   const agents = [];
+  const chatBindings = [];
   const telegramBots = [];
   const agentIds = new Set();
-  const telegramUsernames = new Set();
+  const chatBindingKeys = new Set();
 
   for (const configFile of configFiles) {
     if (agentIds.has(configFile.agentId)) {
@@ -301,18 +342,26 @@ export async function loadConfig(configPath = DEFAULT_CONFIG_PATH) {
     const normalized = await normalizeAgentConfig(configFile);
     agents.push(normalized.agent);
 
-    for (const bot of normalized.telegramBots) {
-      if (telegramUsernames.has(bot.username)) {
-        throw new Error(`Duplicate Telegram bot username: ${bot.username}`);
+    for (const binding of normalized.chatBindings) {
+      const key = `${binding.platform}:${binding.bindingId}`;
+      if (chatBindingKeys.has(key)) {
+        if (binding.platform === "telegram") {
+          throw new Error(`Duplicate Telegram bot username: ${binding.username}`);
+        }
+        throw new Error(`Duplicate chat binding: ${key}`);
       }
-      telegramUsernames.add(bot.username);
-      telegramBots.push(bot);
+      chatBindingKeys.add(key);
+      chatBindings.push(binding);
+      if (binding.platform === "telegram") {
+        telegramBots.push(binding);
+      }
     }
   }
 
   return {
     configPath: path.resolve(configPath),
     agents,
+    chatBindings,
     telegramBots
   };
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCacheScope } from "../src/chat_adapter/cache-scope.js";
+import { buildCacheScope } from "../src/chat_adapter/common/cache-scope.js";
 import { createRuntime } from "./support/builders.js";
 import { FakeBotApi } from "./support/fakes.js";
 import { waitFor } from "./support/async.js";

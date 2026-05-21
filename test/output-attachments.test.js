@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   parseOutput,
   parseOutputSegments
-} from "../src/chat_adapter/output-attachments.js";
+} from "../src/chat_adapter/common/output-attachments.js";
 
 test("parseOutputSegments returns a single text segment when no control block exists", () => {
   assert.deepEqual(parseOutputSegments("plain text"), [

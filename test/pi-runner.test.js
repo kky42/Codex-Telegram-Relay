@@ -10,7 +10,7 @@ import {
   resetPiFeatureDetectionCache,
   startPiRun
 } from "../src/cli_adapter/pi/runner.js";
-import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/output-instructions.js";
+import { ATTACHMENT_OUTPUT_DEVELOPER_INSTRUCTIONS } from "../src/chat_adapter/common/output-instructions.js";
 import { createFakeCliCommand } from "./support/fakes.js";
 
 test("buildPiArgs uses print json mode for a fresh session", () => {

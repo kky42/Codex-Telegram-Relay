@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { ensureDir, writeJsonFileAtomic } from "../utils.js";
+import { ensureDir, writeJsonFileAtomic } from "../../utils.js";
 
 function normalizeScopeValue(value, fallback) {
   const normalized = String(value ?? "").trim();

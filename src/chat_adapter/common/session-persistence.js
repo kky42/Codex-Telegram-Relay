@@ -1,11 +1,11 @@
+import { AUTO_DEFAULT } from "../../auto-mode.js";
 import {
   DEFAULT_MODEL,
   DEFAULT_REASONING_EFFORT
 } from "../../runtime-settings.js";
-import { AUTO_DEFAULT } from "../../auto-mode.js";
 
 export const NOOP_CONFIG_STORE = {
-  async loadTelegramBotConfig() {
+  async loadChatBindingConfig() {
     throw new Error("Config reload is unavailable.");
   }
 };
@@ -33,9 +33,9 @@ function runtimeStateFromAgent(agent) {
 }
 
 export class SessionPersistence {
-  constructor({ botConfig }) {
-    this.botConfig = botConfig;
-    this.state = runtimeStateFromAgent(botConfig.agent);
+  constructor({ bindingConfig, botConfig = null }) {
+    this.bindingConfig = bindingConfig ?? botConfig;
+    this.state = runtimeStateFromAgent(this.bindingConfig?.agent);
   }
 
   get sessionId() {
@@ -107,8 +107,12 @@ export class SessionPersistence {
     this.contextLength = null;
   }
 
+  async resetChatToBindingDefaults() {
+    this.state = runtimeStateFromAgent(this.bindingConfig?.agent);
+  }
+
   async resetChatToBotDefaults() {
-    this.state = runtimeStateFromAgent(this.botConfig.agent);
+    await this.resetChatToBindingDefaults();
   }
 
   async applyRuntimeSettings(patch) {

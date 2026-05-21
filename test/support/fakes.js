@@ -174,6 +174,17 @@ export class FakeConfigStore {
       }
     );
   }
+
+  async loadChatBindingConfig({ platform, agentId, bindingId }) {
+    if (platform === "telegram") {
+      return this.loadTelegramBotConfig({ agentId, username: bindingId });
+    }
+    if (this.loadFailure) {
+      throw this.loadFailure;
+    }
+    this.loads.push({ platform, agentId, bindingId });
+    return structuredClone(this.loadedBotConfig);
+  }
 }
 
 export function createControlledRunnerFactory() {
